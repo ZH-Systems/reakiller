@@ -50,3 +50,7 @@ A new WPF interface is in `ReaKiller.Desktop`, styled in an Akitu-inspired blue 
 Build both projects via the Windows GitHub Actions workflow and download the `ReaKiller-Desktop-win-x64` artifact. Extract the **whole bundle** and launch `ReaKiller.Desktop.exe`. Keep `ReaKiller.exe` in the same folder. You can continue to run `ReaKiller.exe` from CMD or PowerShell separately.
 
 The desktop design uses a suggested blue palette rather than a verified official Akitu brand specification. The Windows build and runtime behavior have not yet been verified in this session.
+
+### Desktop UI refresh
+
+The desktop layout now has an Akitu-inspired navy-to-blue header, three clear sections (paths, settings, activity), a persistent action bar, image counting via **Scan images**, a live progress indicator, output logs, an **Open report** action and cancellation. Controls are locked while a conversion runs to prevent changing active settings. In-place replacement retains the existing explicit confirmation. The converter CLI remains unchanged and still handles all image processing and timestamp preservation. Windows compilation and end-to-end testing are required before relying on this updated desktop release.
