@@ -35,6 +35,27 @@ public sealed class ConversionTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task OptionalEnhancementsProducePngAndPreserveOriginal()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "enhance.jpg");
+            var outputFolder = Path.Combine(root, "converted");
+            WriteJpeg(source);
+            var result = await ReaKiller.RunAsync(
+                ["convert", source, "--output", outputFolder,
+                 "--contrast", "15", "--sharpen", "0.6", "--auto-contrast"]);
+            Assert.Equal(0, result);
+            Assert.True(File.Exists(source));
+            using var resultImage = new MagickImage(Path.Combine(outputFolder, "enhance_jpg.png"));
+            Assert.Equal(32u, resultImage.Width);
+            Assert.Equal(24u, resultImage.Height);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
