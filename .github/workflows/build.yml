@@ -21,7 +21,15 @@ jobs:
         run: dotnet test ReaKiller.Tests/ReaKiller.Tests.csproj -c Release
       - name: Publish
         run: dotnet publish ReaKiller/ReaKiller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+      - name: Publish desktop UI
+        run: dotnet publish ReaKiller.Desktop/ReaKiller.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o desktop
+      - name: Assemble desktop bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle | Out-Null
+          Copy-Item desktop/* bundle/ -Recurse -Force
+          Copy-Item publish/* bundle/ -Recurse -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: ReaKiller-win-x64
-          path: publish/
+          name: ReaKiller-Desktop-win-x64
+          path: bundle/
