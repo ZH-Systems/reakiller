@@ -165,6 +165,7 @@ public static class ReaKiller
 
                             // Write atomically so failed conversions never leave misleading PNG outputs.
                             var temporary = output + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                            try
                             {
                                 image.Strip();
                                 image.Settings.SetDefine(MagickFormat.Png, "compression-level", options.Compression == "max" ? "9" : "6");
@@ -177,7 +178,11 @@ public static class ReaKiller
                                         throw new InvalidDataException("Output PNG validation failed: dimensions mismatch.");
                                 }
                                 staged.Add((temporary, output));
-
+                            }
+                            catch
+                            {
+                                if (File.Exists(temporary)) File.Delete(temporary);
+                                throw;
                             }
                         }
                         // All pages must be valid before committing any output.
