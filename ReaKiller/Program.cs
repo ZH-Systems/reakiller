@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using ImageMagick;
 
@@ -15,16 +14,19 @@ internal static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
     public static async Task<int> RunAsync(string[] args)
     {
-        if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
+        if (args.Length == 0)
+            return await RunInteractiveAsync();
+
+        if (args.Contains("--help") || args.Contains("-h"))
         {
             PrintUsage();
-            return args.Length == 0 ? 2 : 0;
+            return 0;
         }
 
         Options options;
@@ -46,8 +48,8 @@ internal static class ReaKiller
         var sourceRoot = sourceIsFile
             ? Path.GetDirectoryName(Path.GetFullPath(options.Source))!
             : Path.GetFullPath(options.Source);
-        var destination = Path.GetFullPath(options.Destination);
-        if (!sourceIsFile && IsUnderOrEqual(destination, sourceRoot))
+        var destination = options.InPlace ? sourceRoot : Path.GetFullPath(options.Destination);
+        if (!options.InPlace && !sourceIsFile && IsUnderOrEqual(destination, sourceRoot))
         {
             Console.Error.WriteLine("Output directory must be outside the input directory to avoid accidental recursive processing.");
             return 2;
@@ -70,8 +72,10 @@ internal static class ReaKiller
 
         if (!options.DryRun) Directory.CreateDirectory(destination);
         Console.WriteLine($"ReaKiller: {inputFiles.Length} input file(s), {options.Threads} worker(s).");
+        if (options.InPlace) Console.WriteLine("IN-PLACE MODE: originals will be deleted ONLY after successful PNG conversion and verification.");
         var results = new ConcurrentBag<Result>();
         var total = 0;
+        var progressLock = new object();
 
         await Parallel.ForEachAsync(inputFiles,
             new ParallelOptions { MaxDegreeOfParallelism = options.Threads },
@@ -114,6 +118,7 @@ internal static class ReaKiller
                     if (pages.Count == 0) throw new InvalidDataException("No image pages decoded.");
 
                     var created = new List<string>();
+                    var skipped = false;
                     try
                     {
                         for (var index = 0; index < pages.Count; index++)
@@ -124,6 +129,7 @@ internal static class ReaKiller
                             if (File.Exists(output) && !options.Overwrite)
                             {
                                 results.Add(new Result(file, output, "SKIPPED", "Output exists (use --overwrite)."));
+                                skipped = true;
                                 continue;
                             }
 
@@ -149,6 +155,11 @@ internal static class ReaKiller
                             {
                                 image.Strip();
                                 image.Write(temporary, MagickFormat.Png);
+                                using (var check = new MagickImage(temporary, MagickFormat.Png))
+                                {
+                                    if (check.Width != image.Width || check.Height != image.Height)
+                                        throw new InvalidDataException("Output PNG validation failed: dimensions mismatch.");
+                                }
                                 if (File.Exists(output))
                                     File.Move(temporary, output, true);
                                 else
@@ -162,10 +173,15 @@ internal static class ReaKiller
                                 if (File.Exists(temporary)) File.Delete(temporary);
                             }
                         }
+                        if (options.InPlace && !skipped && created.Count == pages.Count)
+                        {
+                            // The original is only removed once every output page was successfully written.
+                            File.Delete(file);
+                        }
                     }
                     catch
                     {
-                        // No source images are ever modified.
+                        // Do not touch originals on conversion failure.
                         foreach (var path in created) { try { File.Delete(path); } catch { } }
                         throw;
                     }
@@ -178,7 +194,10 @@ internal static class ReaKiller
                 finally
                 {
                     var done = Interlocked.Increment(ref total);
-                    Console.WriteLine($"[{done}/{inputFiles.Length}] {Path.GetFileName(file)}");
+                    lock (progressLock)
+                    {
+                        DrawProgress(done, inputFiles.Length);
+                    }
                 }
                 return ValueTask.CompletedTask;
             });
@@ -195,11 +214,80 @@ internal static class ReaKiller
             Console.WriteLine("Report: " + report);
         }
 
+        Console.WriteLine();
         var failed = ordered.Count(r => r.Status == "FAILED");
         var succeeded = ordered.Count(r => r.Status == "OK");
         var skipped = ordered.Count(r => r.Status == "SKIPPED");
         Console.WriteLine($"Complete: {succeeded} outputs, {skipped} skipped, {failed} failed.");
         return failed > 0 ? 1 : 0;
+    }
+
+    private static async Task<int> RunInteractiveAsync()
+    {
+        Console.WriteLine("========================================");
+        Console.WriteLine("       ReaKiller PNG Converter");
+        Console.WriteLine("========================================");
+        Console.WriteLine("Supported: IMG, DCM, DICOM, JPG, JPEG, TIF, TIFF");
+        Console.WriteLine();
+
+        static string Ask(string prompt)
+        {
+            Console.Write(prompt);
+            return (Console.ReadLine() ?? "").Trim().Trim('"');
+        }
+
+        var source = Ask("Source file or folder: ");
+        if (string.IsNullOrWhiteSpace(source)) return 2;
+        var inPlace = Ask("Replace source files with PNGs in place? [y/N]: ")
+            .Equals("y", StringComparison.OrdinalIgnoreCase);
+        string? destination = null;
+        if (!inPlace)
+            destination = Ask("Output folder: ");
+        var recursive = Ask("Include subfolders? [Y/n]: ")
+            is var answer && !answer.Equals("n", StringComparison.OrdinalIgnoreCase);
+        var threadsText = Ask("Parallel workers [4]: ");
+        var threads = int.TryParse(threadsText, out var selectedThreads) && selectedThreads > 0
+            ? selectedThreads : 4;
+        var widthText = Ask("Optional max width, blank to preserve resolution: ");
+        var overwrite = Ask("Overwrite existing output PNGs? [y/N]: ")
+            .Equals("y", StringComparison.OrdinalIgnoreCase);
+
+        if (inPlace)
+        {
+            Console.WriteLine();
+            Console.WriteLine("WARNING: Successfully converted source files will be DELETED.");
+            Console.Write("Type REPLACE to confirm in-place conversion: ");
+            if (Console.ReadLine()?.Trim() != "REPLACE")
+            {
+                Console.WriteLine("Cancelled, no changes made.");
+                return 0;
+            }
+        }
+
+        var cli = new List<string> { "convert", source };
+        if (inPlace) cli.Add("--in-place");
+        else { cli.Add("--output"); cli.Add(destination ?? ""); }
+        if (recursive) cli.Add("--recursive");
+        cli.Add("--threads"); cli.Add(threads.ToString(CultureInfo.InvariantCulture));
+        if (int.TryParse(widthText, out var width) && width > 0)
+        { cli.Add("--max-width"); cli.Add(width.ToString(CultureInfo.InvariantCulture)); }
+        if (overwrite) cli.Add("--overwrite");
+        Console.WriteLine();
+        return await RunAsync(cli.ToArray());
+    }
+
+    private static void DrawProgress(int done, int total)
+    {
+        var ratio = total == 0 ? 1.0 : (double)done / total;
+        const int barLength = 28;
+        var filled = Math.Clamp((int)Math.Round(ratio * barLength), 0, barLength);
+        var message = $"[{new string('#', filled)}{new string('-', barLength - filled)}] {ratio:P0} ({done}/{total})";
+        if (Console.IsOutputRedirected) Console.WriteLine(message);
+        else
+        {
+            Console.Write("\r" + message.PadRight(Math.Max(message.Length, 65)));
+            if (done == total) Console.WriteLine();
+        }
     }
 
     private static string Escape(string value) =>
@@ -236,7 +324,7 @@ internal static class ReaKiller
         if (args.Length <= offset) throw new ArgumentException("Missing input path.");
         var source = args[offset];
         string? output = null;
-        bool recursive = false, overwrite = false, dryRun = false;
+        bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
         int threads = Math.Min(4, Environment.ProcessorCount);
         int? maxWidth = null, maxHeight = null;
 
@@ -257,6 +345,7 @@ internal static class ReaKiller
                 case "--recursive": recursive = true; break;
                 case "--overwrite": overwrite = true; break;
                 case "--dry-run": dryRun = true; break;
+                case "--in-place": inPlace = true; break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--max-width": maxWidth = ParsePositive(Value(), flag); break;
                 case "--max-height": maxHeight = ParsePositive(Value(), flag); break;
@@ -270,10 +359,12 @@ internal static class ReaKiller
             }
         }
 
-        if (string.IsNullOrWhiteSpace(output))
-            throw new ArgumentException("Specify an output directory using --output.");
-        return new Options(source, output, recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun);
+        if (!inPlace && string.IsNullOrWhiteSpace(output))
+            throw new ArgumentException("Specify an output directory using --output, or select --in-place.");
+        if (inPlace && output is not null)
+            throw new ArgumentException("--in-place and --output are mutually exclusive.");
+        return new Options(source, output ?? "", recursive, threads,
+            maxWidth, maxHeight, overwrite, dryRun, inPlace);
     }
 
     private static int ParsePositive(string value, string name)
@@ -291,6 +382,7 @@ internal static class ReaKiller
             Usage:
               ReaKiller.exe convert <file-or-directory> --output <directory> [options]
             Options:
+              --in-place              Write PNG beside source, then delete converted source
               --recursive, -r         Traverse subdirectories
               --threads <n>          Parallel workers (default up to 4)
               --max-width <pixels>   Optional maximum output width
@@ -302,7 +394,8 @@ internal static class ReaKiller
 
             Outputs use the source extension as a suffix (e.g. image_img.png).
             TIFF and multi-frame DICOM pages get _p0001, _p0002, etc.
-            Source files are never changed or deleted.
+            By default, source files are preserved. --in-place deletes each source
+            only after all of its PNG outputs have been written and validated.
             """);
     }
 }
