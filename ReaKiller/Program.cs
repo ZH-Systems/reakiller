@@ -155,8 +155,9 @@ internal static class ReaKiller
                             {
                                 image.Strip();
                                 image.Write(temporary, MagickFormat.Png);
-                                using (var check = new MagickImage(temporary, MagickFormat.Png))
+                                using (var check = new MagickImage())
                                 {
+                                    check.Read(temporary, MagickFormat.Png);
                                     if (check.Width != image.Width || check.Height != image.Height)
                                         throw new InvalidDataException("Output PNG validation failed: dimensions mismatch.");
                                 }
@@ -243,8 +244,8 @@ internal static class ReaKiller
         string? destination = null;
         if (!inPlace)
             destination = Ask("Output folder: ");
-        var recursive = Ask("Include subfolders? [Y/n]: ")
-            is var answer && !answer.Equals("n", StringComparison.OrdinalIgnoreCase);
+        var recursiveAnswer = Ask("Include subfolders? [Y/n]: ");
+        var recursive = !recursiveAnswer.Equals("n", StringComparison.OrdinalIgnoreCase);
         var threadsText = Ask("Parallel workers [4]: ");
         var threads = int.TryParse(threadsText, out var selectedThreads) && selectedThreads > 0
             ? selectedThreads : 4;
