@@ -73,3 +73,25 @@ The enhancement implementation and associated unit test are committed but are no
 The desktop now displays a native WPF progress bar and a live, scrolling results grid. The conversion engine emits one structured `REAKILLER_EVENT:` JSON line per completed source file. Each result is shown as green **Succeeded**, red **Failed**, or gray **Skipped**, with failure details where available. The grid keeps the latest 2,000 results for responsiveness; the full CSV report is retained. The raw console stream is available under **Technical output** for debugging. This also works when multiple worker threads finish in a different order.
 
 The Windows build and new preview UI still require an end-to-end smoke test; the prior working CLI remains accessible.
+
+## Output filename patterns
+
+The desktop UI has an **Output file naming** field with a live example, and patterns are included in saved JSON presets. The CLI accepts `--name-pattern`.
+
+| Token | Meaning |
+| --- | --- |
+| `{name}` | Original filename without extension |
+| `{ext}` | Original extension (without dot) |
+| `{index}` | Sequential five-digit number, ordered by source path |
+| `{date}` | Source file last-modified date formatted yyyyMMdd |
+
+Default: `{name}_{ext}`, preserving existing behavior. The output extension `.png` is appended automatically. Multipage inputs still receive page suffixes.
+
+Examples:
+
+```cmd
+ReaKiller.exe convert "D:\Images" --output "D:\Converted" --recursive --name-pattern "Dental_{index}_{name}"
+ReaKiller.exe convert "D:\Images" --in-place --recursive --name-pattern "{date}_{name}"
+```
+
+The converter checks the resolved names for duplicates before processing, and refuses conflicts rather than silently overwriting converted files. Existing files continue to respect `--overwrite`. As before, backups are recommended with in-place mode. Build and integration validation remain pending.
