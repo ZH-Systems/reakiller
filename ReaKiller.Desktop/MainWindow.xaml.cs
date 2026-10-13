@@ -7,7 +7,6 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
 
 namespace ReaKiller.Desktop;
@@ -36,7 +35,7 @@ public partial class MainWindow : Window
 
     private static string? BrowseFolder()
     {
-        using var dialog = new FolderBrowserDialog
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
             Description = "Select an image folder",
             UseDescriptionForTitle = true,
@@ -156,9 +155,6 @@ public partial class MainWindow : Window
                 catch (Exception ex) { Log.AppendText("Progress parse warning: " + ex.Message + Environment.NewLine); }
                 return;
             }
-        });
-        Dispatcher.Invoke(() =>
-        {
             // CLI progress is written to redirected stdout one line per completed file.
             Log.AppendText(text.TrimEnd('\r') + Environment.NewLine);
             if (text.StartsWith("Complete:", StringComparison.OrdinalIgnoreCase))
