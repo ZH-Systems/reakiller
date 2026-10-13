@@ -35,6 +35,39 @@ public sealed class ConversionTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConvertedPngInheritsSourceTimestamps(bool inPlace)
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "dated.img");
+            WriteJpeg(source);
+            var created = new DateTime(2015, 4, 3, 12, 0, 0, DateTimeKind.Utc);
+            var modified = new DateTime(2016, 5, 4, 13, 0, 0, DateTimeKind.Utc);
+            var accessed = new DateTime(2017, 6, 5, 14, 0, 0, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(source, created);
+            File.SetLastWriteTimeUtc(source, modified);
+            File.SetLastAccessTimeUtc(source, accessed);
+            var expectedCreated = File.GetCreationTimeUtc(source);
+            var expectedModified = File.GetLastWriteTimeUtc(source);
+            var expectedAccessed = File.GetLastAccessTimeUtc(source);
+            var outputFolder = inPlace ? root : Path.Combine(root, "converted");
+            var arguments = inPlace
+                ? new[] { "convert", source, "--in-place" }
+                : new[] { "convert", source, "--output", outputFolder };
+            Assert.Equal(0, await ReaKiller.RunAsync(arguments));
+            var output = Path.Combine(outputFolder, "dated_img.png");
+            Assert.True(File.Exists(output));
+            Assert.Equal(expectedCreated, File.GetCreationTimeUtc(output));
+            Assert.Equal(expectedModified, File.GetLastWriteTimeUtc(output));
+            Assert.Equal(expectedAccessed, File.GetLastAccessTimeUtc(output));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task InPlaceConversionRemovesOnlyConvertedOriginal()
     {
