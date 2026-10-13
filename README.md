@@ -67,3 +67,9 @@ ReaKiller.exe convert "D:\Images" --output "D:\Converted" --auto-contrast
 Contrast uses Magick.NET brightness/contrast with unchanged brightness. Sharpening uses unsharp masking. Auto contrast uses automatic level stretching. Enhancements affect the PNG pixels and can exaggerate artifacts in medical radiographs. Do not enable these by default for clinical migrations; retain source images and inspect representative outputs. The current implementation has no before/after preview or reusable enhancement presets. These remain potential usability improvements.
 
 The enhancement implementation and associated unit test are committed but are not confirmed by a successful Windows CI build in this session.
+
+## Live desktop progress and file results
+
+The desktop now displays a native WPF progress bar and a live, scrolling results grid. The conversion engine emits one structured `REAKILLER_EVENT:` JSON line per completed source file. Each result is shown as green **Succeeded**, red **Failed**, or gray **Skipped**, with failure details where available. The grid keeps the latest 2,000 results for responsiveness; the full CSV report is retained. The raw console stream is available under **Technical output** for debugging. This also works when multiple worker threads finish in a different order.
+
+The Windows build and new preview UI still require an end-to-end smoke test; the prior working CLI remains accessible.
