@@ -151,7 +151,6 @@ internal static class ReaKiller
 
                             // Write atomically so failed conversions never leave misleading PNG outputs.
                             var temporary = output + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                            try
                             {
                                 image.Strip();
                                 image.Settings.SetDefine(MagickFormat.Png, "compression-level", options.Compression == "max" ? "9" : "6");
@@ -165,10 +164,6 @@ internal static class ReaKiller
                                 }
                                 staged.Add((temporary, output));
 
-                            }
-                            finally
-                            {
-                                // Pending files are cleaned after commit or rollback.
                             }
                         }
                         // All pages must be valid before committing any output.
@@ -204,7 +199,13 @@ internal static class ReaKiller
                                 }
                                 if (options.InPlace)
                                     File.Delete(file);
-                                foreach (var backup in backups) File.Delete(backup.Backup);
+                                // Backup cleanup must not trigger rollback after the source was deleted.
+                                foreach (var backup in backups)
+                                {
+                                    try { File.Delete(backup.Backup); }
+                                    catch (IOException cleanupError)
+                                    { Console.Error.WriteLine("Backup cleanup warning: " + cleanupError.Message); }
+                                }
                                 foreach (var item in staged)
                                     results.Add(new Result(file, item.Output, "OK",
                                         new FileInfo(item.Output).Length + " bytes"));
@@ -223,7 +224,6 @@ internal static class ReaKiller
                     {
                         foreach (var item in staged)
                             if (File.Exists(item.Temporary)) File.Delete(item.Temporary);
-                    }
                     }
                 }
                 catch (Exception ex)
