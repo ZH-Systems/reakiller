@@ -17,6 +17,48 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task CustomNamingPatternIncludesIndexAndOriginalName()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "example.img");
+            var output = Path.Combine(root, "converted");
+            WriteJpeg(source);
+            var result = await ReaKiller.RunAsync(
+                ["convert", source, "--output", output,
+                 "--name-pattern", "dental_{index}_{name}_{ext}"]);
+            Assert.Equal(0, result);
+            Assert.True(File.Exists(Path.Combine(output, "dental_00001_example_img.png")));
+            Assert.True(File.Exists(source));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DuplicatePatternIsRejectedBeforeAnyOutputIsWritten()
+    {
+        var root = NewFolder();
+        try
+        {
+            WriteJpeg(Path.Combine(root, "first.img"));
+            WriteJpeg(Path.Combine(root, "second.jpg"));
+            var output = Path.Combine(Path.GetTempPath(), "ReaKiller-test-output", Guid.NewGuid().ToString("N"));
+            try
+            {
+                var result = await ReaKiller.RunAsync(
+                    ["convert", root, "--output", output, "--name-pattern", "same"]);
+                Assert.Equal(2, result);
+                Assert.False(File.Exists(Path.Combine(output, "same.png")));
+                Assert.True(File.Exists(Path.Combine(root, "first.img")));
+                Assert.True(File.Exists(Path.Combine(root, "second.jpg")));
+            }
+            finally { if (Directory.Exists(output)) Directory.Delete(output, true); }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task ImgJpegToPngPreservesSourceByDefault()
     {
         var root = NewFolder();
