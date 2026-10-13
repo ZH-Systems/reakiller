@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Win32;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -210,6 +212,8 @@ public partial class MainWindow : Window
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
         start.ArgumentList.Add(((ComboBoxItem)Compression.SelectedItem).Tag.ToString()!);
+        start.ArgumentList.Add("--compression-effort");
+        start.ArgumentList.Add(((int)EffortSlider.Value).ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
         if (ContrastSlider.Value != 0)
         {
@@ -245,6 +249,7 @@ public partial class MainWindow : Window
             AutoContrast.IsEnabled = false;
             ContrastSlider.IsEnabled = false;
             SharpenSlider.IsEnabled = false;
+            EffortSlider.IsEnabled = false;
             CancelButton.IsEnabled = true;
             Progress.Value = 0;
             ProgressText.Text = "Starting...";
@@ -286,6 +291,7 @@ public partial class MainWindow : Window
             AutoContrast.IsEnabled = true;
             ContrastSlider.IsEnabled = true;
             SharpenSlider.IsEnabled = true;
+            EffortSlider.IsEnabled = true;
             CancelButton.IsEnabled = false;
         }
     }
@@ -293,6 +299,137 @@ public partial class MainWindow : Window
     private async Task ReadLinesAsync(StreamReader reader)
     {
         while (await reader.ReadLineAsync() is { } line) AppendLog(line);
+    }
+
+
+    private sealed record SavedPreset(int CompressionEffort, int Contrast, double Sharpen,
+        bool AutoContrast, int Threads, int? MaxWidth, bool Recursive, bool Overwrite);
+
+    private void EffortSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (EffortValue is not null) EffortValue.Text = $"{(int)e.NewValue}%";
+    }
+
+    private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = !_running && e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
+            ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (_running || !e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths && paths.Length > 0)
+            SourcePath.Text = paths[0];
+    }
+
+    private void SavePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(Threads.Text, out var threads) || threads < 1 || threads > 64)
+        {
+            MessageBox.Show("Workers must be between 1 and 64.", "Invalid settings");
+            return;
+        }
+        int? width = null;
+        if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text))
+        {
+            if (!int.TryParse(MaxWidthInput.Text, out var parsed) || parsed < 1)
+            {
+                MessageBox.Show("Maximum width must be a positive integer.", "Invalid settings");
+                return;
+            }
+            width = parsed;
+        }
+        var dialog = new SaveFileDialog
+        {
+            Filter = "ReaKiller preset (*.json)|*.json",
+            DefaultExt = ".json",
+            FileName = "reakiller-preset.json"
+        };
+        if (dialog.ShowDialog() != true) return;
+        var preset = new SavedPreset((int)EffortSlider.Value, (int)ContrastSlider.Value,
+            SharpenSlider.Value, AutoContrast.IsChecked == true, threads, width,
+            Recursive.IsChecked == true, Overwrite.IsChecked == true);
+        try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(preset, new JsonSerializerOptions { WriteIndented = true })); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to save preset"); }
+    }
+
+    private void LoadPreset_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "ReaKiller preset (*.json)|*.json" };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var preset = JsonSerializer.Deserialize<SavedPreset>(File.ReadAllText(dialog.FileName))
+                ?? throw new InvalidDataException("Preset is empty.");
+            if (preset.CompressionEffort is < 0 or > 100 || preset.Contrast is < -50 or > 50 ||
+                !double.IsFinite(preset.Sharpen) || preset.Sharpen is < 0 or > 2 ||
+                preset.Threads is < 1 or > 64 || preset.MaxWidth is <= 0)
+                throw new InvalidDataException("Preset contains invalid values.");
+            EffortSlider.Value = preset.CompressionEffort;
+            ContrastSlider.Value = preset.Contrast;
+            SharpenSlider.Value = preset.Sharpen;
+            AutoContrast.IsChecked = preset.AutoContrast;
+            Threads.Text = preset.Threads.ToString();
+            MaxWidthInput.Text = preset.MaxWidth?.ToString() ?? "";
+            Recursive.IsChecked = preset.Recursive;
+            Overwrite.IsChecked = preset.Overwrite;
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to load preset"); }
+    }
+
+    private async void Preview_Click(object sender, RoutedEventArgs e)
+    {
+        if (_running) return;
+        string source = SourcePath.Text.Trim().Trim('"');
+        if (Directory.Exists(source))
+        {
+            try
+            {
+                source = Directory.EnumerateFiles(source, "*", Recursive.IsChecked == true
+                        ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                    .FirstOrDefault(path => Extensions.Contains(Path.GetExtension(path))) ?? "";
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Preview error"); return; }
+        }
+        if (!File.Exists(source))
+        {
+            MessageBox.Show("Choose a folder containing supported images or an individual image.", "Preview");
+            return;
+        }
+        var cli = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
+        if (!File.Exists(cli)) { MessageBox.Show("ReaKiller.exe is missing.", "Preview"); return; }
+        var temporary = Path.Combine(Path.GetTempPath(), "ReaKillerPreview", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temporary);
+        try
+        {
+            var start = new ProcessStartInfo(cli) { UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true };
+            foreach (var arg in new[] { "convert", source, "--output", temporary,
+                "--compression-effort", ((int)EffortSlider.Value).ToString(),
+                "--contrast", ((int)ContrastSlider.Value).ToString(),
+                "--sharpen", SharpenSlider.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) })
+                start.ArgumentList.Add(arg);
+            if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
+            if (int.TryParse(MaxWidthInput.Text, out var width) && width > 0)
+            { start.ArgumentList.Add("--max-width"); start.ArgumentList.Add(width.ToString()); }
+            using var process = Process.Start(start) ?? throw new IOException("Cannot start converter.");
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            await Task.WhenAll(outputTask, errorTask);
+            if (process.ExitCode != 0) throw new InvalidDataException(await errorTask);
+            var converted = Directory.EnumerateFiles(temporary, "*.png").FirstOrDefault()
+                ?? throw new InvalidDataException("No preview PNG was created.");
+            var window = new PreviewWindow(source, converted) { Owner = this };
+            window.ShowDialog();
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Preview failed"); }
+        finally
+        {
+            try { Directory.Delete(temporary, true); } catch { /* Temp cleanup will be retried by OS/user. */ }
+        }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
