@@ -14,7 +14,7 @@ internal static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -117,7 +117,7 @@ internal static class ReaKiller
                     pages.Read(file, readSettings);
                     if (pages.Count == 0) throw new InvalidDataException("No image pages decoded.");
 
-                    var created = new List<string>();
+                    var staged = new List<(string Temporary, string Output)>();
                     var skipped = false;
                     try
                     {
@@ -154,6 +154,8 @@ internal static class ReaKiller
                             try
                             {
                                 image.Strip();
+                                image.Settings.SetDefine(MagickFormat.Png, "compression-level", options.Compression == "max" ? "9" : "6");
+                                image.Settings.SetDefine(MagickFormat.Png, "compression-filter", options.Compression == "max" ? "6" : "5");
                                 image.Write(temporary, MagickFormat.Png);
                                 using (var check = new MagickImage())
                                 {
@@ -161,30 +163,67 @@ internal static class ReaKiller
                                     if (check.Width != image.Width || check.Height != image.Height)
                                         throw new InvalidDataException("Output PNG validation failed: dimensions mismatch.");
                                 }
-                                if (File.Exists(output))
-                                    File.Move(temporary, output, true);
-                                else
-                                    File.Move(temporary, output);
-                                created.Add(output);
-                                results.Add(new Result(file, output, "OK",
-                                    $"{image.Width}x{image.Height}; {new FileInfo(output).Length} bytes"));
+                                staged.Add((temporary, output));
+
                             }
                             finally
                             {
-                                if (File.Exists(temporary)) File.Delete(temporary);
+                                // Pending files are cleaned after commit or rollback.
                             }
                         }
-                        if (options.InPlace && !skipped && created.Count == pages.Count)
+                        // All pages must be valid before committing any output.
+                        // For in-place mode, any existing page means we skip the entire source,
+                        // rather than deleting the source when only some pages were converted.
+                        if (options.InPlace && skipped)
                         {
-                            // The original is only removed once every output page was successfully written.
-                            File.Delete(file);
+                            foreach (var item in staged) File.Delete(item.Temporary);
+                            staged.Clear();
+                        }
+                        else
+                        {
+                            var backups = new List<(string Backup, string Original)>();
+                            var committed = new List<string>();
+                            try
+                            {
+                                // Back up all pre-existing outputs before the first replacement.
+                                foreach (var item in staged)
+                                {
+                                    if (File.Exists(item.Output))
+                                    {
+                                        if (!options.Overwrite)
+                                            throw new IOException("Destination appeared during conversion: " + item.Output);
+                                        var backup = item.Output + "." + Guid.NewGuid().ToString("N") + ".bak";
+                                        File.Move(item.Output, backup);
+                                        backups.Add((backup, item.Output));
+                                    }
+                                }
+                                foreach (var item in staged)
+                                {
+                                    File.Move(item.Temporary, item.Output);
+                                    committed.Add(item.Output);
+                                }
+                                if (options.InPlace)
+                                    File.Delete(file);
+                                foreach (var backup in backups) File.Delete(backup.Backup);
+                                foreach (var item in staged)
+                                    results.Add(new Result(file, item.Output, "OK",
+                                        new FileInfo(item.Output).Length + " bytes"));
+                            }
+                            catch
+                            {
+                                foreach (var path in committed)
+                                    if (File.Exists(path)) File.Delete(path);
+                                foreach (var backup in backups)
+                                    if (File.Exists(backup.Backup)) File.Move(backup.Backup, backup.Original, true);
+                                throw;
+                            }
                         }
                     }
-                    catch
+                    finally
                     {
-                        // Do not touch originals on conversion failure.
-                        foreach (var path in created) { try { File.Delete(path); } catch { } }
-                        throw;
+                        foreach (var item in staged)
+                            if (File.Exists(item.Temporary)) File.Delete(item.Temporary);
+                    }
                     }
                 }
                 catch (Exception ex)
@@ -326,6 +365,7 @@ internal static class ReaKiller
         var source = args[offset];
         string? output = null;
         bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
+        string compressionMode = "lossless";
         int threads = Math.Min(4, Environment.ProcessorCount);
         int? maxWidth = null, maxHeight = null;
 
@@ -354,7 +394,7 @@ internal static class ReaKiller
                     var compression = Value().ToLowerInvariant();
                     if (compression is not ("lossless" or "max"))
                         throw new ArgumentException("--compression must be lossless or max.");
-                    // Both currently use ImageMagick lossless PNG encoding.
+                    compressionMode = compression;
                     break;
                 default: throw new ArgumentException("Unknown option: " + flag);
             }
@@ -365,7 +405,7 @@ internal static class ReaKiller
         if (inPlace && output is not null)
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode);
     }
 
     private static int ParsePositive(string value, string name)
@@ -388,7 +428,7 @@ internal static class ReaKiller
               --threads <n>          Parallel workers (default up to 4)
               --max-width <pixels>   Optional maximum output width
               --max-height <pixels>  Optional maximum output height
-              --compression <mode>   lossless|max (both currently lossless)
+              --compression <mode>   lossless|max (zlib levels 6 and 9)
               --overwrite           Replace existing output files
               --dry-run             Preview input/output paths
               --help                Show help
