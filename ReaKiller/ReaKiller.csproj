@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.2" />
+    <PackageReference Include="fo-dicom" Version="5.2.6" />
   </ItemGroup>
 </Project>
