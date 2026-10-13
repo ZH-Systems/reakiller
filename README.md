@@ -42,3 +42,11 @@ DICOM files are first parsed by fo-dicom to confirm valid datasets with PixelDat
 ## Timestamp preservation
 
 Every generated PNG inherits its source file's filesystem creation time, last-modified time, and last-access time (UTC-based operations), where supported by the filesystem. Timestamps are captured before image decoding and assigned before in-place originals are removed. On filesystems with coarse or unsupported timestamp metadata, values may differ due to OS/filesystem behavior. These are filesystem timestamps, not embedded DICOM acquisition metadata. Existing converted files need re-conversion with `--overwrite` to update their timestamps. Regression tests cover both output-folder and in-place conversion.
+
+## Windows desktop interface
+
+A new WPF interface is in `ReaKiller.Desktop`, styled in an Akitu-inspired blue palette. It includes source-folder browsing, destination selection, optional in-place replacement, recursive scanning, overwrite control, compression profile, thread count, optional maximum width, progress bar, logs, and cancellation. The interface launches the existing CLI converter so unattended CMD workflows remain available.
+
+Build both projects via the Windows GitHub Actions workflow and download the `ReaKiller-Desktop-win-x64` artifact. Extract the **whole bundle** and launch `ReaKiller.Desktop.exe`. Keep `ReaKiller.exe` in the same folder. You can continue to run `ReaKiller.exe` from CMD or PowerShell separately.
+
+The desktop design uses a suggested blue palette rather than a verified official Akitu brand specification. The Windows build and runtime behavior have not yet been verified in this session.
