@@ -372,7 +372,7 @@ public partial class MainWindow : Window
             }
             width = parsed;
         }
-        var dialog = new SaveFileDialog
+        var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "ReaKiller preset (*.json)|*.json",
             DefaultExt = ".json",
@@ -388,7 +388,7 @@ public partial class MainWindow : Window
 
     private void LoadPreset_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "ReaKiller preset (*.json)|*.json" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "ReaKiller preset (*.json)|*.json" };
         if (dialog.ShowDialog() != true) return;
         try
         {
