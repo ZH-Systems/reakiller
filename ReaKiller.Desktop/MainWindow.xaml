@@ -83,6 +83,18 @@
          TextWrapping="Wrap" Foreground="#9B6628" FontSize="12" Margin="21,6,0,0"/>
        </StackPanel>
       </Border>
+      <Border Background="#F2F7FD" CornerRadius="10" Padding="15" Margin="0,0,0,16">
+       <StackPanel>
+        <TextBlock Text="OUTPUT FILE NAMING" Foreground="#274763" FontWeight="SemiBold"
+         ToolTip="Use placeholders to rename converted PNGs. .png is always appended automatically."/>
+        <TextBox x:Name="NamePattern" Text="{name}_{ext}" TextChanged="NamePattern_Changed"
+         Margin="0,9,0,5" ToolTip="Tokens: {name} original name, {ext} original extension, {index} sequential number, {date} original modified date."/>
+        <TextBlock Text="Tokens: {name}   {ext}   {index}   {date}" FontSize="12" Foreground="#607B98"
+         ToolTip="Index is a five-digit sequential number. Date uses yyyyMMdd from source file modified date."/>
+        <TextBlock x:Name="NamePreview" Text="Example: I11624_img.png" Foreground="#1673D5" FontWeight="SemiBold"
+         Margin="0,7,0,0" ToolTip="Naming preview; actual names are checked for collisions before conversion."/>
+       </StackPanel>
+      </Border>
       <TextBlock ToolTip="Select an output folder when not replacing files in place." Text="OUTPUT FOLDER" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,7"/>
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
