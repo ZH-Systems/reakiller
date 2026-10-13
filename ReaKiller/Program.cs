@@ -15,7 +15,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int Contrast, double Sharpen, bool AutoContrast);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -179,8 +179,8 @@ public static class ReaKiller
                             try
                             {
                                 image.Strip();
-                                image.Settings.SetDefine(MagickFormat.Png, "compression-level", options.Compression == "max" ? "9" : "6");
-                                image.Settings.SetDefine(MagickFormat.Png, "compression-filter", options.Compression == "max" ? "6" : "5");
+                                image.Settings.SetDefine(MagickFormat.Png, "compression-level", Math.Clamp((int)Math.Round(options.CompressionEffort * 9.0 / 100), 0, 9).ToString(CultureInfo.InvariantCulture));
+                                image.Settings.SetDefine(MagickFormat.Png, "compression-filter", "5");
                                 image.Write(temporary, MagickFormat.Png);
                                 using (var check = new MagickImage())
                                 {
@@ -400,6 +400,7 @@ public static class ReaKiller
         string? output = null;
         bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
         string compressionMode = "lossless";
+        int? compressionEffort = null;
         int contrast = 0;
         double sharpen = 0;
         bool autoContrast = false;
@@ -426,6 +427,11 @@ public static class ReaKiller
                 case "--in-place": inPlace = true; break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--auto-contrast": autoContrast = true; break;
+                case "--compression-effort":
+                    if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var effort) || effort < 0 || effort > 100)
+                        throw new ArgumentException("--compression-effort must be 0 to 100.");
+                    compressionEffort = effort;
+                    break;
                 case "--contrast":
                     if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out contrast) || contrast < -100 || contrast > 100)
                         throw new ArgumentException("--contrast must be between -100 and 100.");
@@ -451,7 +457,7 @@ public static class ReaKiller
         if (inPlace && output is not null)
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, contrast, sharpen, autoContrast);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast);
     }
 
     private static int ParsePositive(string value, string name)
@@ -474,7 +480,8 @@ public static class ReaKiller
               --threads <n>          Parallel workers (default up to 4)
               --max-width <pixels>   Optional maximum output width
               --max-height <pixels>  Optional maximum output height
-              --compression <mode>   lossless|max (zlib levels 6 and 9)
+              --compression <mode>   lossless|max (presets, overridden by effort)
+              --compression-effort <0..100> PNG lossless zlib effort; 100 is slowest
               --contrast <-100..100> Optional contrast adjustment, 0 is off
               --sharpen <0..2>       Optional unsharp-mask strength, 0 is off
               --auto-contrast        Stretch tonal range automatically
