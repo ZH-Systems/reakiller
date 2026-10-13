@@ -140,6 +140,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        var sourceWasFile = File.Exists(source);
+        var sourceDirectory = sourceWasFile ? Path.GetDirectoryName(Path.GetFullPath(source))! : Path.GetFullPath(source);
         var inPlace = InPlace.IsChecked == true;
         var destination = OutputPath.Text.Trim().Trim('"');
         if (!inPlace && string.IsNullOrWhiteSpace(destination))
@@ -231,9 +233,9 @@ public partial class MainWindow : Window
             await Task.WhenAll(standard, errors);
             ProgressText.Text = _cancelRequested ? "Cancelled" : _process.ExitCode == 0 ? "Complete" : $"Exited with code {_process.ExitCode}";
             if (_cancelRequested) SummaryText.Text = "Cancelled. Review source and output files before rerunning.";
-            _lastReport = Path.Combine(inPlace ? (File.Exists(source) ? Path.GetDirectoryName(Path.GetFullPath(source))! : Path.GetFullPath(source)) : Path.GetFullPath(destination), "reakiller-report.csv");
+            _lastReport = Path.Combine(inPlace ? sourceDirectory : Path.GetFullPath(destination), "reakiller-report.csv");
             OpenReportButton.IsEnabled = File.Exists(_lastReport);
-            if (_process.ExitCode == 0) Progress.Value = 100;
+            if (_process.ExitCode == 0 && !_cancelRequested) Progress.Value = 100;
         }
         catch (Exception ex)
         {
