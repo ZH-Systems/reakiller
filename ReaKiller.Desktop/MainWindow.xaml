@@ -1,94 +1,151 @@
 <Window x:Class="ReaKiller.Desktop.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ReaKiller | Image Converter" Height="720" Width="1020"
-        MinHeight="620" MinWidth="800" Background="{StaticResource Canvas}"
-        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="104"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <Border Background="{StaticResource DeepBlue}" Grid.Row="0">
-            <Grid Margin="32,16">
-                <StackPanel>
-                    <TextBlock Text="ReaKiller" FontWeight="Bold" FontSize="30" Foreground="White"/>
-                    <TextBlock Text="LOCAL IMAGE CONVERSION  ·  IMG  /  DICOM  /  JPEG  /  TIFF  →  PNG"
-                               Foreground="#C4DEFA" FontSize="12" Margin="0,5,0,0"/>
-                </StackPanel>
-                <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="#24588B"
-                        Padding="12,7" CornerRadius="14">
-                    <TextBlock Text="●  Local processing" Foreground="White" FontSize="12"/>
-                </Border>
-            </Grid>
-        </Border>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-          <StackPanel Margin="32,25,32,30">
-            <TextBlock Text="Convert images" FontSize="22" FontWeight="SemiBold" Foreground="#153657"/>
-            <TextBlock Text="Select a folder, choose the destination, and convert safely to PNG."
-                       Foreground="#637D98" Margin="0,4,0,20"/>
-            <Border Background="White" CornerRadius="12" Padding="24" BorderBrush="#DFEAF5" BorderThickness="1">
-              <StackPanel>
-                <TextBlock Text="Source folder or file" FontWeight="SemiBold" Foreground="#173B60"/>
-                <Grid Margin="0,8,0,17">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBox x:Name="SourcePath" MinWidth="250" />
-                  <Button Grid.Column="1" Content="Browse folder" Margin="10,0,0,0" Click="BrowseSource_Click"/>
-                </Grid>
-                <CheckBox x:Name="InPlace" Content="Replace converted source files in place"
-                          Checked="InPlace_Changed" Unchecked="InPlace_Changed" Foreground="#173B60"/>
-                <TextBlock Text="In-place mode deletes an original only after successful conversion. Back up files first."
-                           Foreground="#A16A26" FontSize="12" Margin="21,5,0,18"/>
-                <TextBlock Text="Output folder" FontWeight="SemiBold" Foreground="#173B60"/>
-                <Grid Margin="0,8,0,20">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBox x:Name="OutputPath" />
-                  <Button x:Name="BrowseOutput" Grid.Column="1" Content="Browse folder" Margin="10,0,0,0" Click="BrowseOutput_Click"/>
-                </Grid>
-                <WrapPanel>
-                  <CheckBox x:Name="Recursive" Content="Include subfolders" IsChecked="True" Margin="0,0,28,0"/>
-                  <CheckBox x:Name="Overwrite" Content="Overwrite existing PNGs" Margin="0,0,28,0"/>
-                </WrapPanel>
-                <Grid Margin="0,19,0,0">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                  <StackPanel Margin="0,0,14,0">
-                    <TextBlock Text="PNG compression" FontWeight="SemiBold" Foreground="#173B60" Margin="0,0,0,7"/>
-                    <ComboBox x:Name="Compression" SelectedIndex="1" Padding="8,7">
-                      <ComboBoxItem Content="Lossless (balanced)" Tag="lossless"/>
-                      <ComboBoxItem Content="Maximum lossless" Tag="max"/>
-                    </ComboBox>
-                  </StackPanel>
-                  <StackPanel Grid.Column="1" Margin="0,0,14,0">
-                    <TextBlock Text="Parallel workers" FontWeight="SemiBold" Foreground="#173B60" Margin="0,0,0,7"/>
-                    <TextBox x:Name="Threads" Text="4"/>
-                  </StackPanel>
-                  <StackPanel Grid.Column="2">
-                    <TextBlock Text="Max width (optional)" FontWeight="SemiBold" Foreground="#173B60" Margin="0,0,0,7"/>
-                    <TextBox x:Name="MaxWidth" ToolTip="Blank preserves native resolution"/>
-                  </StackPanel>
-                </Grid>
-              </StackPanel>
-            </Border>
-            <Border Background="White" CornerRadius="12" Padding="24" BorderBrush="#DFEAF5" BorderThickness="1" Margin="0,18,0,0">
-              <StackPanel>
-                <DockPanel>
-                  <TextBlock Text="Conversion progress" FontSize="17" FontWeight="SemiBold" Foreground="#173B60"/>
-                  <TextBlock x:Name="ProgressText" Text="Ready" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                             Foreground="#587D9F"/>
-                </DockPanel>
-                <ProgressBar x:Name="Progress" Height="12" Minimum="0" Maximum="100" Margin="0,17,0,15"
-                             Foreground="{StaticResource AkituBlue}" Background="#DDEAF7"/>
-                <TextBox x:Name="Log" IsReadOnly="True" Height="110" FontFamily="Consolas" FontSize="12"
-                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#F6F9FD"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                  <Button x:Name="CancelButton" Content="Cancel" Background="#7B90A7"
-                          Margin="0,0,12,0" IsEnabled="False" Click="Cancel_Click"/>
-                  <Button x:Name="StartButton" Content="Start conversion →" MinWidth="165"
-                          Click="Start_Click"/>
-                </StackPanel>
-              </StackPanel>
-            </Border>
-          </StackPanel>
-        </ScrollViewer>
-    </Grid>
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="ReaKiller | Image Converter" Width="1080" Height="790" MinWidth="820" MinHeight="650"
+ WindowStartupLocation="CenterScreen" Background="#F2F6FB" FontFamily="Segoe UI">
+ <Window.Resources>
+  <SolidColorBrush x:Key="Navy" Color="#102E50"/>
+  <SolidColorBrush x:Key="Accent" Color="#1673D5"/>
+  <SolidColorBrush x:Key="Muted" Color="#607B98"/>
+  <Style x:Key="Card" TargetType="Border">
+   <Setter Property="Background" Value="White"/>
+   <Setter Property="CornerRadius" Value="14"/>
+   <Setter Property="Padding" Value="23"/>
+   <Setter Property="BorderBrush" Value="#DFE8F4"/>
+   <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style x:Key="SectionTitle" TargetType="TextBlock">
+   <Setter Property="Foreground" Value="{StaticResource Navy}"/>
+   <Setter Property="FontSize" Value="17"/>
+   <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style TargetType="CheckBox">
+   <Setter Property="Foreground" Value="#274763"/>
+   <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style TargetType="ProgressBar">
+   <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+   <Setter Property="Background" Value="#DDE9F7"/>
+  </Style>
+ </Window.Resources>
+ <Grid>
+  <Grid.RowDefinitions><RowDefinition Height="112"/><RowDefinition Height="*"/><RowDefinition Height="72"/></Grid.RowDefinitions>
+  <Border Grid.Row="0">
+   <Border.Background>
+    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+     <GradientStop Color="#102E50" Offset="0"/>
+     <GradientStop Color="#1766B4" Offset="1"/>
+    </LinearGradientBrush>
+   </Border.Background>
+   <Grid Margin="32,18">
+    <StackPanel VerticalAlignment="Center">
+     <TextBlock Text="ReaKiller" FontSize="32" FontWeight="Bold" Foreground="White"/>
+     <TextBlock Text="IMAGE CONVERSION STUDIO" Foreground="#C7DFFB" FontSize="11" FontWeight="SemiBold" Margin="2,2,0,0"/>
+    </StackPanel>
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Right">
+     <Border Background="#285A87" CornerRadius="14" Padding="13,7" HorizontalAlignment="Right">
+      <TextBlock Text="●  100% local processing" Foreground="White" FontSize="12"/>
+     </Border>
+     <TextBlock Text="IMG · DICOM · JPG · TIFF  →  PNG" Foreground="#D1E5F8" FontSize="12" Margin="0,9,0,0"/>
+    </StackPanel>
+   </Grid>
+  </Border>
+  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+   <StackPanel Margin="32,24,32,24">
+    <DockPanel Margin="0,0,0,16">
+     <StackPanel DockPanel.Dock="Left">
+      <TextBlock Text="Conversion workspace" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource Navy}"/>
+      <TextBlock Text="Configure a batch and track every file in one place." Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+     </StackPanel>
+    </DockPanel>
+    <Border Style="{StaticResource Card}">
+     <StackPanel>
+      <DockPanel Margin="0,0,0,18">
+       <TextBlock Text="01  Source &amp; destination" Style="{StaticResource SectionTitle}"/>
+       <TextBlock x:Name="FileCountText" Text="No source selected" HorizontalAlignment="Right" Foreground="{StaticResource Muted}" DockPanel.Dock="Right"/>
+      </DockPanel>
+      <TextBlock Text="SOURCE IMAGES" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,7"/>
+      <Grid>
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBox x:Name="SourcePath" TextChanged="SourcePath_Changed" ToolTip="Paste a file or folder path, or browse for a folder"/>
+       <Button Grid.Column="1" Content="Browse..." Click="BrowseSource_Click" Margin="10,0,0,0" MinWidth="104"/>
+      </Grid>
+      <Grid Margin="0,16,0,13">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <CheckBox x:Name="Recursive" Content="Include nested folders" IsChecked="True" Checked="ScanSetting_Changed" Unchecked="ScanSetting_Changed"/>
+       <Button x:Name="ScanButton" Grid.Column="1" Content="Scan images" Click="Scan_Click" Background="#E7F1FD" Foreground="#165C9F"/>
+      </Grid>
+      <Border Background="#F2F7FD" CornerRadius="10" Padding="15" Margin="0,0,0,16">
+       <StackPanel>
+        <CheckBox x:Name="InPlace" Content="Replace originals with PNG files in the source folder"
+         FontWeight="SemiBold" Checked="InPlace_Changed" Unchecked="InPlace_Changed"/>
+        <TextBlock Text="Caution: in-place mode deletes each original after successful conversion. Keep an external backup."
+         TextWrapping="Wrap" Foreground="#9B6628" FontSize="12" Margin="21,6,0,0"/>
+       </StackPanel>
+      </Border>
+      <TextBlock Text="OUTPUT FOLDER" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,7"/>
+      <Grid>
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBox x:Name="OutputPath"/>
+       <Button x:Name="BrowseOutput" Grid.Column="1" Content="Browse..." Click="BrowseOutput_Click" Margin="10,0,0,0" MinWidth="104"/>
+      </Grid>
+     </StackPanel>
+    </Border>
+    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+     <StackPanel>
+      <TextBlock Text="02  Conversion settings" Style="{StaticResource SectionTitle}" Margin="0,0,0,16"/>
+      <Grid>
+       <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <StackPanel Margin="0,0,16,0">
+        <TextBlock Text="PNG compression" Foreground="#274763" FontWeight="SemiBold" Margin="0,0,0,7"/>
+        <ComboBox x:Name="Compression" SelectedIndex="1" Padding="7">
+         <ComboBoxItem Content="Balanced lossless" Tag="lossless"/>
+         <ComboBoxItem Content="Maximum lossless" Tag="max"/>
+        </ComboBox>
+       </StackPanel>
+       <StackPanel Grid.Column="1" Margin="0,0,16,0">
+        <TextBlock Text="Workers" Foreground="#274763" FontWeight="SemiBold" Margin="0,0,0,7"/>
+        <TextBox x:Name="Threads" Text="4"/>
+       </StackPanel>
+       <StackPanel Grid.Column="2">
+        <TextBlock Text="Max width (px)" Foreground="#274763" FontWeight="SemiBold" Margin="0,0,0,7"/>
+        <TextBox x:Name="MaxWidth" ToolTip="Leave empty to preserve original dimensions"/>
+       </StackPanel>
+      </Grid>
+      <CheckBox x:Name="Overwrite" Content="Overwrite existing output PNGs" Margin="0,17,0,0"/>
+      <TextBlock Text="Full resolution and original file timestamps are preserved by default. Resizing is optional."
+       FontSize="12" Foreground="{StaticResource Muted}" Margin="0,10,0,0"/>
+     </StackPanel>
+    </Border>
+    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+     <StackPanel>
+      <DockPanel LastChildFill="False">
+       <TextBlock Text="03  Conversion activity" Style="{StaticResource SectionTitle}" DockPanel.Dock="Left"/>
+       <TextBlock x:Name="ProgressText" Text="Ready to convert" Foreground="{StaticResource Muted}" DockPanel.Dock="Right"/>
+      </DockPanel>
+      <ProgressBar x:Name="Progress" Height="12" Minimum="0" Maximum="100" Margin="0,17,0,8"/>
+      <Grid Margin="0,0,0,12">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBlock x:Name="SummaryText" Text="No conversion has been started." Foreground="{StaticResource Muted}" FontSize="12"/>
+       <Button x:Name="OpenReportButton" Grid.Column="1" Content="Open report" Click="OpenReport_Click"
+         Background="#E7F1FD" Foreground="#165C9F" IsEnabled="False" Padding="12,6"/>
+      </Grid>
+      <TextBox x:Name="Log" IsReadOnly="True" Height="125" FontFamily="Consolas" FontSize="12"
+       TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F7F9FD"/>
+     </StackPanel>
+    </Border>
+   </StackPanel>
+  </ScrollViewer>
+  <Border Grid.Row="2" Background="White" BorderBrush="#DFE8F4" BorderThickness="0,1,0,0">
+   <Grid Margin="32,12">
+    <TextBlock Text="Source files are preserved unless in-place replacement is enabled." VerticalAlignment="Center"
+     Foreground="{StaticResource Muted}" FontSize="12"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+     <Button x:Name="CancelButton" Content="Cancel" Background="#DCE7F3" Foreground="#214A70"
+      IsEnabled="False" Margin="0,0,12,0" MinWidth="105" Click="Cancel_Click"/>
+     <Button x:Name="StartButton" Content="Start conversion  →" MinWidth="180" Click="Start_Click"/>
+    </StackPanel>
+   </Grid>
+  </Border>
+ </Grid>
 </Window>
