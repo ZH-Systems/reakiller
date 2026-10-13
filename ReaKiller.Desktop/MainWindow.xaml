@@ -159,15 +159,34 @@
        <TextBlock Text="03  Conversion activity" Style="{StaticResource SectionTitle}" DockPanel.Dock="Left" ToolTip="Watch job progress and review conversion results and errors."/>
        <TextBlock x:Name="ProgressText" Text="Ready to convert" Foreground="{StaticResource Muted}" DockPanel.Dock="Right"/>
       </DockPanel>
-      <ProgressBar x:Name="Progress" Height="12" Minimum="0" Maximum="100" Margin="0,17,0,8"/>
+      <ProgressBar x:Name="Progress" Height="18" Minimum="0" Maximum="100" Margin="0,17,0,8" ToolTip="Live file completion percentage. The bar updates as each file finishes."/>
       <Grid Margin="0,0,0,12">
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <TextBlock x:Name="SummaryText" Text="No conversion has been started." Foreground="{StaticResource Muted}" FontSize="12"/>
        <Button x:Name="OpenReportButton" Grid.Column="1" Content="Open report" Click="OpenReport_Click"
          Background="#E7F1FD" Foreground="#165C9F" IsEnabled="False" Padding="12,6"/>
       </Grid>
-      <TextBox x:Name="Log" IsReadOnly="True" Height="125" FontFamily="Consolas" FontSize="12"
-       TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F7F9FD"/>
+      <TextBlock Text="LIVE FILE RESULTS" Foreground="#607B98" FontSize="11" FontWeight="SemiBold" Margin="0,6,0,7" ToolTip="A green Succeeded, red Failed, or gray Skipped status is shown as each file completes."/>
+      <ListView x:Name="ResultsList" Height="170" Background="#F7F9FD" BorderBrush="#DFE8F4" BorderThickness="1"
+       ScrollViewer.VerticalScrollBarVisibility="Auto" VirtualizingPanel.IsVirtualizing="True">
+       <ListView.View>
+        <GridView>
+         <GridViewColumn Header="Image" Width="480" DisplayMemberBinding="{Binding FileName}"/>
+         <GridViewColumn Header="Result" Width="125">
+          <GridViewColumn.CellTemplate>
+           <DataTemplate>
+            <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Foreground="{Binding StatusColor}" ToolTip="{Binding Detail}"/>
+           </DataTemplate>
+          </GridViewColumn.CellTemplate>
+         </GridViewColumn>
+         <GridViewColumn Header="Details" Width="240" DisplayMemberBinding="{Binding Detail}"/>
+        </GridView>
+       </ListView.View>
+      </ListView>
+      <Expander Header="Technical output" Margin="0,10,0,0" ToolTip="Raw converter output for troubleshooting.">
+       <TextBox x:Name="Log" IsReadOnly="True" Height="100" FontFamily="Consolas" FontSize="12"
+        TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#F7F9FD"/>
+      </Expander>
      </StackPanel>
     </Border>
    </StackPanel>
