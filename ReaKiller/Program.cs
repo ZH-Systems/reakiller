@@ -16,7 +16,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -72,6 +72,25 @@ public static class ReaKiller
             return 2;
         }
 
+        // Resolve names before conversion so jobs cannot overwrite each other's outputs.
+        var outputNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var assignedNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < inputFiles.Length; i++)
+        {
+            var file = inputFiles[i];
+            var stem = ResolveName(options.NamePattern, file, i + 1);
+            var relativeFolder = Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
+            var targetFolder = Path.GetFullPath(Path.Combine(destination, relativeFolder));
+            var target = Path.Combine(targetFolder, stem + ".png");
+            if (assignedNames.TryGetValue(target, out var other))
+            {
+                Console.Error.WriteLine($"Naming collision: {file} and {other} both produce {target}. Add {{index}} or {{name}} to the pattern.");
+                return 2;
+            }
+            assignedNames.Add(target, file);
+            outputNames.Add(file, stem);
+        }
+
         if (!options.DryRun) Directory.CreateDirectory(destination);
         Console.WriteLine($"ReaKiller: {inputFiles.Length} input file(s), {options.Threads} worker(s).");
         if (options.InPlace) Console.WriteLine("IN-PLACE MODE: originals will be deleted ONLY after successful PNG conversion and verification.");
@@ -93,7 +112,7 @@ public static class ReaKiller
                     // Include the original extension to avoid collisions such as image.jpg and image.tif.
                     var stem = Path.GetFileNameWithoutExtension(file);
                     var extensionTag = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
-                    var outputStem = $"{stem}_{extensionTag}";
+                    var outputStem = outputNames[file];
                     if (options.DryRun)
                     {
                         Record(new Result(file, Path.Combine(destinationSubfolder,
@@ -408,6 +427,7 @@ public static class ReaKiller
         string? output = null;
         bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
         string compressionMode = "lossless";
+        string namePattern = "{name}_{ext}";
         int? compressionEffort = null;
         int contrast = 0;
         double sharpen = 0;
@@ -435,6 +455,7 @@ public static class ReaKiller
                 case "--in-place": inPlace = true; break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--auto-contrast": autoContrast = true; break;
+                case "--name-pattern": namePattern = Value(); break;
                 case "--compression-effort":
                     if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var effort) || effort < 0 || effort > 100)
                         throw new ArgumentException("--compression-effort must be 0 to 100.");
@@ -464,8 +485,43 @@ public static class ReaKiller
             throw new ArgumentException("Specify an output directory using --output, or select --in-place.");
         if (inPlace && output is not null)
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
+        ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern);
+    }
+
+    private static void ValidateNamePattern(string pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+            throw new ArgumentException("Naming pattern cannot be empty.");
+        var removed = System.Text.RegularExpressions.Regex.Replace(
+            pattern, @"\{(?:name|ext|index|date)\}", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (removed.Contains('{') || removed.Contains('}'))
+            throw new ArgumentException("Unknown naming token. Supported: {name}, {ext}, {index}, {date}.");
+        if (pattern.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || pattern.Contains('/') || pattern.Contains('\\'))
+            throw new ArgumentException("Naming pattern contains invalid filename characters.");
+    }
+
+    private static string ResolveName(string pattern, string file, int index)
+    {
+        var name = Path.GetFileNameWithoutExtension(file);
+        var ext = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
+        var date = File.GetLastWriteTime(file).ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+        var output = System.Text.RegularExpressions.Regex.Replace(pattern, @"\{(name|ext|index|date)\}",
+            match => match.Groups[1].Value.ToLowerInvariant() switch
+            {
+                "name" => name,
+                "ext" => ext,
+                "index" => index.ToString("D5", CultureInfo.InvariantCulture),
+                "date" => date,
+                _ => throw new InvalidOperationException("Invalid token")
+            }, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (string.IsNullOrWhiteSpace(output) || output is "." or ".." ||
+            output.EndsWith('.') || output.EndsWith(' ') ||
+            output.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            output.Contains('/') || output.Contains('\\'))
+            throw new ArgumentException("Resolved filename is invalid: " + output);
+        return output;
     }
 
     private static int ParsePositive(string value, string name)
@@ -493,6 +549,7 @@ public static class ReaKiller
               --contrast <-100..100> Optional contrast adjustment, 0 is off
               --sharpen <0..2>       Optional unsharp-mask strength, 0 is off
               --auto-contrast        Stretch tonal range automatically
+              --name-pattern <text>  Tokens: {name}, {ext}, {index}, {date}; extension .png is automatic
               --overwrite           Replace existing output files
               --dry-run             Preview input/output paths
               --help                Show help
