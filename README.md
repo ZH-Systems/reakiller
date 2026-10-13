@@ -95,3 +95,7 @@ ReaKiller.exe convert "D:\Images" --in-place --recursive --name-pattern "{date}_
 ```
 
 The converter checks the resolved names for duplicates before processing, and refuses conflicts rather than silently overwriting converted files. Existing files continue to respect `--overwrite`. As before, backups are recommended with in-place mode. Build and integration validation remain pending.
+
+## Stop conversion (desktop)
+
+The desktop footer provides a red **Stop conversion** button while a batch is running. It writes a per-job temporary stop marker and asks the converter to finish or abandon in-flight image processing without starting additional output commits. Completed PNGs remain; source files that have not completed in-place conversion remain untouched. A stopped file is reported as STOPPED with exit code 3 when applicable. The same CLI also accepts `--stop-file <path>`. This is cooperative cancellation rather than immediate process termination, so an active decode may continue for some time before the batch stops. Windows build/runtime verification is still required.
