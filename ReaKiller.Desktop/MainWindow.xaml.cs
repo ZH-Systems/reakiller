@@ -12,6 +12,10 @@ public partial class MainWindow : Window
 {
     private Process? _process;
     private bool _running;
+    private bool _cancelRequested;
+    private string? _lastReport;
+    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
+    { ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".tif", ".tiff" };
 
     public MainWindow()
     {
@@ -47,9 +51,57 @@ public partial class MainWindow : Window
         if (chosen is not null) OutputPath.Text = chosen;
     }
 
+    private void SourcePath_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (FileCountText is not null) FileCountText.Text = "Scan to count files";
+    }
+
+    private void ScanSetting_Changed(object sender, RoutedEventArgs e)
+    {
+        if (FileCountText is not null) FileCountText.Text = "Scan to count files";
+    }
+
+    private async void Scan_Click(object sender, RoutedEventArgs e)
+    {
+        var source = SourcePath.Text.Trim().Trim('"');
+        if (!File.Exists(source) && !Directory.Exists(source))
+        {
+            MessageBox.Show("Select an existing image or folder first.", "Source required");
+            return;
+        }
+        ScanButton.IsEnabled = false;
+        FileCountText.Text = "Scanning...";
+        var recursive = Recursive.IsChecked == true;
+        try
+        {
+            var count = await Task.Run(() => File.Exists(source)
+                ? (Extensions.Contains(Path.GetExtension(source)) ? 1 : 0)
+                : Directory.EnumerateFiles(source, "*",
+                    recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                    .Count(f => Extensions.Contains(Path.GetExtension(f))));
+            FileCountText.Text = $"{count:N0} supported image(s)";
+        }
+        catch (Exception ex)
+        {
+            FileCountText.Text = "Scan failed";
+            MessageBox.Show(ex.Message, "Unable to scan folder");
+        }
+        finally { ScanButton.IsEnabled = !_running; }
+    }
+
+    private void OpenReport_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastReport is null || !File.Exists(_lastReport)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(_lastReport) { UseShellExecute = true });
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to open report"); }
+    }
+
     private void InPlace_Changed(object sender, RoutedEventArgs e)
     {
-        if (OutputPath is null || BrowseOutput is null) return;
+        if (OutputPath is null || BrowseOutput is null || InPlace is null) return;
         var enable = InPlace.IsChecked != true;
         OutputPath.IsEnabled = enable;
         BrowseOutput.IsEnabled = enable;
@@ -60,7 +112,10 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(text)) return;
         Dispatcher.Invoke(() =>
         {
-            Log.AppendText(text + Environment.NewLine);
+            // CLI progress is written to redirected stdout one line per completed file.
+            Log.AppendText(text.TrimEnd('\r') + Environment.NewLine);
+            if (text.StartsWith("Complete:", StringComparison.OrdinalIgnoreCase))
+                SummaryText.Text = text;
             if (Log.Text.Length > 16000) Log.Text = Log.Text[^12000..];
             Log.ScrollToEnd();
             var match = Regex.Match(text, @"\((\d+)/(\d+)\)");
@@ -119,6 +174,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        _lastReport = null;
+        OpenReportButton.IsEnabled = false;
         var start = new ProcessStartInfo(cli)
         {
             UseShellExecute = false,
@@ -149,10 +206,22 @@ public partial class MainWindow : Window
         try
         {
             _running = true;
+            _cancelRequested = false;
             StartButton.IsEnabled = false;
+            ScanButton.IsEnabled = false;
+            SourcePath.IsEnabled = false;
+            OutputPath.IsEnabled = false;
+            BrowseOutput.IsEnabled = false;
+            InPlace.IsEnabled = false;
+            Recursive.IsEnabled = false;
+            Overwrite.IsEnabled = false;
+            Compression.IsEnabled = false;
+            Threads.IsEnabled = false;
+            MaxWidth.IsEnabled = false;
             CancelButton.IsEnabled = true;
             Progress.Value = 0;
             ProgressText.Text = "Starting...";
+            SummaryText.Text = "Conversion in progress";
             Log.Clear();
             _process = new Process { StartInfo = start, EnableRaisingEvents = true };
             _process.Start();
@@ -160,7 +229,10 @@ public partial class MainWindow : Window
             var errors = ReadLinesAsync(_process.StandardError);
             await _process.WaitForExitAsync();
             await Task.WhenAll(standard, errors);
-            ProgressText.Text = _process.ExitCode == 0 ? "Complete" : $"Exited with code {_process.ExitCode}";
+            ProgressText.Text = _cancelRequested ? "Cancelled" : _process.ExitCode == 0 ? "Complete" : $"Exited with code {_process.ExitCode}";
+            if (_cancelRequested) SummaryText.Text = "Cancelled. Review source and output files before rerunning.";
+            _lastReport = Path.Combine(inPlace ? (File.Exists(source) ? Path.GetDirectoryName(Path.GetFullPath(source))! : Path.GetFullPath(source)) : Path.GetFullPath(destination), "reakiller-report.csv");
+            OpenReportButton.IsEnabled = File.Exists(_lastReport);
             if (_process.ExitCode == 0) Progress.Value = 100;
         }
         catch (Exception ex)
@@ -174,6 +246,16 @@ public partial class MainWindow : Window
             _process = null;
             _running = false;
             StartButton.IsEnabled = true;
+            ScanButton.IsEnabled = true;
+            SourcePath.IsEnabled = true;
+            OutputPath.IsEnabled = InPlace.IsChecked != true;
+            BrowseOutput.IsEnabled = InPlace.IsChecked != true;
+            InPlace.IsEnabled = true;
+            Recursive.IsEnabled = true;
+            Overwrite.IsEnabled = true;
+            Compression.IsEnabled = true;
+            Threads.IsEnabled = true;
+            MaxWidth.IsEnabled = true;
             CancelButton.IsEnabled = false;
         }
     }
@@ -187,6 +269,8 @@ public partial class MainWindow : Window
     {
         try
         {
+            _cancelRequested = true;
+            ProgressText.Text = "Cancelling...";
             if (_process is { HasExited: false })
                 _process.Kill(entireProcessTree: true);
         }
