@@ -109,7 +109,7 @@
        </StackPanel>
        <StackPanel Grid.Column="2">
         <TextBlock Text="Max width (px)" Foreground="#274763" FontWeight="SemiBold" Margin="0,0,0,7"/>
-        <TextBox x:Name="MaxWidth" ToolTip="Leave empty to preserve original dimensions"/>
+        <TextBox x:Name="MaxWidthInput" ToolTip="Leave empty to preserve original dimensions"/>
        </StackPanel>
       </Grid>
       <CheckBox x:Name="Overwrite" Content="Overwrite existing output PNGs" Margin="0,17,0,0"/>
