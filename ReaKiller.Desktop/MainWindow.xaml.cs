@@ -51,6 +51,17 @@ public partial class MainWindow : Window
         if (chosen is not null) OutputPath.Text = chosen;
     }
 
+    private void ContrastSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (ContrastValue is not null) ContrastValue.Text = ((int)e.NewValue).ToString();
+    }
+
+    private void SharpenSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (SharpenValue is not null)
+            SharpenValue.Text = e.NewValue.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     private void SourcePath_Changed(object sender, TextChangedEventArgs e)
     {
         if (FileCountText is not null) FileCountText.Text = "Scan to count files";
@@ -199,6 +210,17 @@ public partial class MainWindow : Window
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
         start.ArgumentList.Add(((ComboBoxItem)Compression.SelectedItem).Tag.ToString()!);
+        if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
+        if (ContrastSlider.Value != 0)
+        {
+            start.ArgumentList.Add("--contrast");
+            start.ArgumentList.Add(((int)ContrastSlider.Value).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        if (SharpenSlider.Value > 0)
+        {
+            start.ArgumentList.Add("--sharpen");
+            start.ArgumentList.Add(SharpenSlider.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+        }
         if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text))
         {
             start.ArgumentList.Add("--max-width");
@@ -220,6 +242,9 @@ public partial class MainWindow : Window
             Compression.IsEnabled = false;
             Threads.IsEnabled = false;
             MaxWidthInput.IsEnabled = false;
+            AutoContrast.IsEnabled = false;
+            ContrastSlider.IsEnabled = false;
+            SharpenSlider.IsEnabled = false;
             CancelButton.IsEnabled = true;
             Progress.Value = 0;
             ProgressText.Text = "Starting...";
@@ -258,6 +283,9 @@ public partial class MainWindow : Window
             Compression.IsEnabled = true;
             Threads.IsEnabled = true;
             MaxWidthInput.IsEnabled = true;
+            AutoContrast.IsEnabled = true;
+            ContrastSlider.IsEnabled = true;
+            SharpenSlider.IsEnabled = true;
             CancelButton.IsEnabled = false;
         }
     }
