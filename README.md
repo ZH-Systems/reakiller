@@ -54,3 +54,16 @@ The desktop design uses a suggested blue palette rather than a verified official
 ### Desktop UI refresh
 
 The desktop layout now has an Akitu-inspired navy-to-blue header, three clear sections (paths, settings, activity), a persistent action bar, image counting via **Scan images**, a live progress indicator, output logs, an **Open report** action and cancellation. Controls are locked while a conversion runs to prevent changing active settings. In-place replacement retains the existing explicit confirmation. The converter CLI remains unchanged and still handles all image processing and timestamp preservation. Windows compilation and end-to-end testing are required before relying on this updated desktop release.
+
+## Optional image enhancement (desktop and CLI)
+
+The desktop interface now has optional **Auto contrast**, **Contrast** (-50 to +50), and **Sharpening** (0.0 to 2.0) controls. All are off by default. The CLI allows a wider contrast range (-100 to +100).
+
+```cmd
+ReaKiller.exe convert "D:\Images" --output "D:\Converted" --recursive --contrast 15 --sharpen 0.6
+ReaKiller.exe convert "D:\Images" --output "D:\Converted" --auto-contrast
+```
+
+Contrast uses Magick.NET brightness/contrast with unchanged brightness. Sharpening uses unsharp masking. Auto contrast uses automatic level stretching. Enhancements affect the PNG pixels and can exaggerate artifacts in medical radiographs. Do not enable these by default for clinical migrations; retain source images and inspect representative outputs. The current implementation has no before/after preview or reusable enhancement presets. These remain potential usability improvements.
+
+The enhancement implementation and associated unit test are committed but are not confirmed by a successful Windows CI build in this session.
