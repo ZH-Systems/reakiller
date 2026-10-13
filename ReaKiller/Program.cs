@@ -16,7 +16,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -112,6 +112,11 @@ public static class ReaKiller
                 void Record(Result result) { results.Add(result); fileResults.Add(result); }
                 try
                 {
+                    if (options.StopFile is not null && File.Exists(options.StopFile))
+                    {
+                        Record(new Result(file, "", "STOPPED", "Stopped by user."));
+                        return ValueTask.CompletedTask;
+                    }
                     var relative = Path.GetRelativePath(sourceRoot, file);
                     var destinationSubfolder = Path.Combine(destination,
                         Path.GetDirectoryName(relative) ?? "");
@@ -227,7 +232,11 @@ public static class ReaKiller
                         // All pages must be valid before committing any output.
                         // For in-place mode, any existing page means we skip the entire source,
                         // rather than deleting the source when only some pages were converted.
-                        if (options.InPlace && skipped)
+                        if (options.StopFile is not null && File.Exists(options.StopFile))
+                        {
+                            Record(new Result(file, "", "STOPPED", "Stopped before committing PNG output."));
+                        }
+                        else if (options.InPlace && skipped)
                         {
                             foreach (var item in staged) File.Delete(item.Temporary);
                             staged.Clear();
@@ -297,6 +306,7 @@ public static class ReaKiller
                 {
                     var done = Interlocked.Increment(ref total);
                     var status = fileResults.Any(r => r.Status == "FAILED") ? "FAILED" :
+                        fileResults.Any(r => r.Status == "STOPPED") ? "STOPPED" :
                         fileResults.Any(r => r.Status == "SKIPPED") ? "SKIPPED" :
                         fileResults.Any(r => r.Status == "OK") ? "SUCCEEDED" : "DRY_RUN";
                     var detail = fileResults.FirstOrDefault(r => r.Status == "FAILED")?.Detail ?? "";
@@ -323,10 +333,11 @@ public static class ReaKiller
 
         Console.WriteLine();
         var failed = ordered.Count(r => r.Status == "FAILED");
+        var stopped = ordered.Count(r => r.Status == "STOPPED");
         var succeeded = ordered.Count(r => r.Status == "OK");
         var skipped = ordered.Count(r => r.Status == "SKIPPED");
-        Console.WriteLine($"Complete: {succeeded} outputs, {skipped} skipped, {failed} failed.");
-        return failed > 0 ? 1 : 0;
+        Console.WriteLine($"Complete: {succeeded} outputs, {skipped} skipped, {failed} failed, {stopped} stopped.");
+        return stopped > 0 ? 3 : failed > 0 ? 1 : 0;
     }
 
     private static async Task<int> RunInteractiveAsync()
@@ -434,6 +445,7 @@ public static class ReaKiller
         bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
         string compressionMode = "lossless";
         string namePattern = "{name}_{ext}";
+        string? stopFile = null;
         int? compressionEffort = null;
         int contrast = 0;
         double sharpen = 0;
@@ -462,6 +474,7 @@ public static class ReaKiller
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--auto-contrast": autoContrast = true; break;
                 case "--name-pattern": namePattern = Value(); break;
+                case "--stop-file": stopFile = Value(); break;
                 case "--compression-effort":
                     if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var effort) || effort < 0 || effort > 100)
                         throw new ArgumentException("--compression-effort must be 0 to 100.");
@@ -493,7 +506,7 @@ public static class ReaKiller
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile);
     }
 
     private static void ValidateNamePattern(string pattern)
@@ -556,6 +569,7 @@ public static class ReaKiller
               --sharpen <0..2>       Optional unsharp-mask strength, 0 is off
               --auto-contrast        Stretch tonal range automatically
               --name-pattern <text>  Tokens: {name}, {ext}, {index}, {date}; extension .png is automatic
+              --stop-file <path>     Stop after current file when this marker exists
               --overwrite           Replace existing output files
               --dry-run             Preview input/output paths
               --help                Show help
