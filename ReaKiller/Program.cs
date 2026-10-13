@@ -15,7 +15,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int Contrast, double Sharpen, bool AutoContrast);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -151,6 +151,12 @@ public static class ReaKiller
                                 skipped = true;
                                 continue;
                             }
+
+                            if (options.AutoContrast) image.AutoLevel();
+                            if (options.Contrast != 0)
+                                image.BrightnessContrast(new Percentage(0), new Percentage(options.Contrast));
+                            if (options.Sharpen > 0)
+                                image.UnsharpMask(0, 1.0, options.Sharpen, 0.02);
 
                             // Optional downscaling. Without these flags, preserve source dimensions.
                             if (options.MaxWidth.HasValue || options.MaxHeight.HasValue)
@@ -394,6 +400,9 @@ public static class ReaKiller
         string? output = null;
         bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
         string compressionMode = "lossless";
+        int contrast = 0;
+        double sharpen = 0;
+        bool autoContrast = false;
         int threads = Math.Min(4, Environment.ProcessorCount);
         int? maxWidth = null, maxHeight = null;
 
@@ -416,6 +425,15 @@ public static class ReaKiller
                 case "--dry-run": dryRun = true; break;
                 case "--in-place": inPlace = true; break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
+                case "--auto-contrast": autoContrast = true; break;
+                case "--contrast":
+                    if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out contrast) || contrast < -100 || contrast > 100)
+                        throw new ArgumentException("--contrast must be between -100 and 100.");
+                    break;
+                case "--sharpen":
+                    if (!double.TryParse(Value(), NumberStyles.Float, CultureInfo.InvariantCulture, out sharpen) || !double.IsFinite(sharpen) || sharpen < 0 || sharpen > 2)
+                        throw new ArgumentException("--sharpen must be between 0 and 2.");
+                    break;
                 case "--max-width": maxWidth = ParsePositive(Value(), flag); break;
                 case "--max-height": maxHeight = ParsePositive(Value(), flag); break;
                 case "--compression":
@@ -433,7 +451,7 @@ public static class ReaKiller
         if (inPlace && output is not null)
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, contrast, sharpen, autoContrast);
     }
 
     private static int ParsePositive(string value, string name)
@@ -457,6 +475,9 @@ public static class ReaKiller
               --max-width <pixels>   Optional maximum output width
               --max-height <pixels>  Optional maximum output height
               --compression <mode>   lossless|max (zlib levels 6 and 9)
+              --contrast <-100..100> Optional contrast adjustment, 0 is off
+              --sharpen <0..2>       Optional unsharp-mask strength, 0 is off
+              --auto-contrast        Stretch tonal range automatically
               --overwrite           Replace existing output files
               --dry-run             Preview input/output paths
               --help                Show help
