@@ -127,6 +127,11 @@ public static class ReaKiller
                             throw new InvalidDataException("DICOM file contains no PixelData tag.");
                     }
 
+                    // Capture timestamps before decoding so reads do not alter last-access metadata.
+                    var sourceCreatedUtc = File.GetCreationTimeUtc(file);
+                    var sourceModifiedUtc = File.GetLastWriteTimeUtc(file);
+                    var sourceAccessedUtc = File.GetLastAccessTimeUtc(file);
+
                     using var pages = new MagickImageCollection();
                     pages.Read(file, readSettings);
                     if (pages.Count == 0) throw new InvalidDataException("No image pages decoded.");
@@ -215,6 +220,10 @@ public static class ReaKiller
                                 {
                                     File.Move(item.Temporary, item.Output);
                                     committed.Add(item.Output);
+                                    // Apply source timestamps before deleting it in in-place mode.
+                                    File.SetCreationTimeUtc(item.Output, sourceCreatedUtc);
+                                    File.SetLastWriteTimeUtc(item.Output, sourceModifiedUtc);
+                                    File.SetLastAccessTimeUtc(item.Output, sourceAccessedUtc);
                                 }
                                 if (options.InPlace)
                                     File.Delete(file);
