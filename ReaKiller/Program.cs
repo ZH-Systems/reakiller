@@ -78,7 +78,13 @@ public static class ReaKiller
         for (var i = 0; i < inputFiles.Length; i++)
         {
             var file = inputFiles[i];
-            var stem = ResolveName(options.NamePattern, file, i + 1);
+            string stem;
+            try { stem = ResolveName(options.NamePattern, file, i + 1); }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("Naming error for " + file + ": " + ex.Message);
+                return 2;
+            }
             var relativeFolder = Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
             var targetFolder = Path.GetFullPath(Path.Combine(destination, relativeFolder));
             var target = Path.Combine(targetFolder, stem + ".png");
