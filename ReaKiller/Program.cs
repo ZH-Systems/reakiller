@@ -2,10 +2,11 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using ImageMagick;
+using FellowOakDicom;
 
 return await ReaKiller.RunAsync(args);
 
-internal static class ReaKiller
+public static class ReaKiller
 {
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -111,6 +112,19 @@ internal static class ReaKiller
                         else
                             throw new NotSupportedException(
                                 "Unrecognized .IMG signature. This file is not a JPEG/TIFF/DICOM variant supported by the initial decoder.");
+                    }
+
+                    if (Path.GetExtension(file).Equals(".dcm", StringComparison.OrdinalIgnoreCase)
+                        || Path.GetExtension(file).Equals(".dicom", StringComparison.OrdinalIgnoreCase)
+                        || (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase)
+                            && ReadSignature(file) == "DICOM"))
+                    {
+                        // Confirm this is a valid DICOM dataset before attempting PNG rendering.
+                        // ImageMagick performs display rendering; clinically accurate VOI handling
+                        // and raw high-bit-depth pixel export still require separate validation.
+                        var dataset = DicomFile.Open(file);
+                        if (!dataset.Dataset.Contains(DicomTag.PixelData))
+                            throw new InvalidDataException("DICOM file contains no PixelData tag.");
                     }
 
                     using var pages = new MagickImageCollection();
