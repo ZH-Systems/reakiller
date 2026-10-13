@@ -68,6 +68,22 @@ public partial class MainWindow : Window
             SharpenValue.Text = e.NewValue.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    private void NamePattern_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (NamePreview is null || NamePattern is null) return;
+        var pattern = NamePattern.Text;
+        var example = pattern.Replace("{name}", "I11624", StringComparison.OrdinalIgnoreCase)
+            .Replace("{ext}", "img", StringComparison.OrdinalIgnoreCase)
+            .Replace("{index}", "00001", StringComparison.OrdinalIgnoreCase)
+            .Replace("{date}", "20180315", StringComparison.OrdinalIgnoreCase);
+        var invalid = string.IsNullOrWhiteSpace(example)
+            || example.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || example.Contains('{') || example.Contains('}')
+            || example.EndsWith('.') || example.EndsWith(' ');
+        NamePreview.Text = invalid ? "Invalid naming pattern" : "Example: " + example + ".png";
+        NamePreview.Foreground = invalid ? Brushes.Firebrick : Brushes.RoyalBlue;
+    }
+
     private void SourcePath_Changed(object sender, TextChangedEventArgs e)
     {
         if (FileCountText is not null) FileCountText.Text = "Scan to count files";
@@ -183,6 +199,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        var pattern = NamePattern.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pattern) || pattern.Contains('{') && !System.Text.RegularExpressions.Regex.IsMatch(pattern, @"\{(?:name|ext|index|date)\}", RegexOptions.IgnoreCase))
+        {
+            MessageBox.Show("Enter a valid naming pattern.", "Naming");
+            return;
+        }
         var sourceWasFile = File.Exists(source);
         var sourceDirectory = sourceWasFile ? Path.GetDirectoryName(Path.GetFullPath(source))! : Path.GetFullPath(source);
         var inPlace = InPlace.IsChecked == true;
@@ -242,6 +264,8 @@ public partial class MainWindow : Window
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
         start.ArgumentList.Add(((ComboBoxItem)Compression.SelectedItem).Tag.ToString()!);
+        start.ArgumentList.Add("--name-pattern");
+        start.ArgumentList.Add(pattern);
         start.ArgumentList.Add("--compression-effort");
         start.ArgumentList.Add(((int)EffortSlider.Value).ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
@@ -276,6 +300,7 @@ public partial class MainWindow : Window
             Compression.IsEnabled = false;
             Threads.IsEnabled = false;
             MaxWidthInput.IsEnabled = false;
+            NamePattern.IsEnabled = false;
             AutoContrast.IsEnabled = false;
             ContrastSlider.IsEnabled = false;
             SharpenSlider.IsEnabled = false;
@@ -319,6 +344,7 @@ public partial class MainWindow : Window
             Compression.IsEnabled = true;
             Threads.IsEnabled = true;
             MaxWidthInput.IsEnabled = true;
+            NamePattern.IsEnabled = true;
             AutoContrast.IsEnabled = true;
             ContrastSlider.IsEnabled = true;
             SharpenSlider.IsEnabled = true;
@@ -334,7 +360,7 @@ public partial class MainWindow : Window
 
 
     private sealed record SavedPreset(int CompressionEffort, int Contrast, double Sharpen,
-        bool AutoContrast, int Threads, int? MaxWidth, bool Recursive, bool Overwrite);
+        bool AutoContrast, int Threads, int? MaxWidth, bool Recursive, bool Overwrite, string NamePattern);
 
     private void EffortSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -381,7 +407,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
         var preset = new SavedPreset((int)EffortSlider.Value, (int)ContrastSlider.Value,
             SharpenSlider.Value, AutoContrast.IsChecked == true, threads, width,
-            Recursive.IsChecked == true, Overwrite.IsChecked == true);
+            Recursive.IsChecked == true, Overwrite.IsChecked == true, NamePattern.Text);
         try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(preset, new JsonSerializerOptions { WriteIndented = true })); }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to save preset"); }
     }
@@ -406,6 +432,7 @@ public partial class MainWindow : Window
             MaxWidthInput.Text = preset.MaxWidth?.ToString() ?? "";
             Recursive.IsChecked = preset.Recursive;
             Overwrite.IsChecked = preset.Overwrite;
+            NamePattern.Text = string.IsNullOrWhiteSpace(preset.NamePattern) ? "{name}_{ext}" : preset.NamePattern;
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to load preset"); }
     }
