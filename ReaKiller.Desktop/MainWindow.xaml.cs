@@ -156,8 +156,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(MaxWidth.Text)
-            && (!int.TryParse(MaxWidth.Text, out int width) || width < 1))
+        if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text)
+            && (!int.TryParse(MaxWidthInput.Text, out int width) || width < 1))
         {
             MessageBox.Show("Max width must be a positive integer.", "Invalid maximum width");
             return;
@@ -199,10 +199,10 @@ public partial class MainWindow : Window
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
         start.ArgumentList.Add(((ComboBoxItem)Compression.SelectedItem).Tag.ToString()!);
-        if (!string.IsNullOrWhiteSpace(MaxWidth.Text))
+        if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text))
         {
             start.ArgumentList.Add("--max-width");
-            start.ArgumentList.Add(MaxWidth.Text.Trim());
+            start.ArgumentList.Add(MaxWidthInput.Text.Trim());
         }
 
         try
@@ -219,7 +219,7 @@ public partial class MainWindow : Window
             Overwrite.IsEnabled = false;
             Compression.IsEnabled = false;
             Threads.IsEnabled = false;
-            MaxWidth.IsEnabled = false;
+            MaxWidthInput.IsEnabled = false;
             CancelButton.IsEnabled = true;
             Progress.Value = 0;
             ProgressText.Text = "Starting...";
@@ -257,7 +257,7 @@ public partial class MainWindow : Window
             Overwrite.IsEnabled = true;
             Compression.IsEnabled = true;
             Threads.IsEnabled = true;
-            MaxWidth.IsEnabled = true;
+            MaxWidthInput.IsEnabled = true;
             CancelButton.IsEnabled = false;
         }
     }
