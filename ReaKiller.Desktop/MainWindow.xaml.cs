@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Collections.ObjectModel;
+using System.Windows.Media;
 using System.Text.Json;
 using Microsoft.Win32;
 using System.IO;
@@ -12,6 +14,8 @@ namespace ReaKiller.Desktop;
 
 public partial class MainWindow : Window
 {
+    private sealed record FileResult(string FileName, string Status, string Detail, Brush StatusColor);
+    private readonly ObservableCollection<FileResult> _fileResults = new();
     private Process? _process;
     private bool _running;
     private bool _cancelRequested;
@@ -22,6 +26,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ResultsList.ItemsSource = _fileResults;
         Closed += (_, _) =>
         {
             try { if (_process is { HasExited: false }) _process.Kill(entireProcessTree: true); }
@@ -123,6 +128,35 @@ public partial class MainWindow : Window
     private void AppendLog(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (text.StartsWith("REAKILLER_EVENT:", StringComparison.Ordinal))
+            {
+                try
+                {
+                    using var json = JsonDocument.Parse(text["REAKILLER_EVENT:".Length..]);
+                    var data = json.RootElement;
+                    var source = data.GetProperty("source").GetString() ?? "";
+                    var status = data.GetProperty("status").GetString() ?? "UNKNOWN";
+                    var detail = data.GetProperty("detail").GetString() ?? "";
+                    var done = data.GetProperty("done").GetInt32();
+                    var total = data.GetProperty("total").GetInt32();
+                    var color = status switch
+                    {
+                        "SUCCEEDED" => Brushes.ForestGreen,
+                        "FAILED" => Brushes.Firebrick,
+                        _ => Brushes.SlateGray
+                    };
+                    _fileResults.Add(new FileResult(Path.GetFileName(source), status == "SUCCEEDED" ? "Succeeded" : status == "FAILED" ? "Failed" : "Skipped", detail, color));
+                    if (_fileResults.Count > 2000) _fileResults.RemoveAt(0);
+                    if (total > 0) Progress.Value = 100.0 * done / total;
+                    ProgressText.Text = $"{done:N0} / {total:N0} files";
+                    ResultsList.ScrollIntoView(_fileResults[^1]);
+                }
+                catch (Exception ex) { Log.AppendText("Progress parse warning: " + ex.Message + Environment.NewLine); }
+                return;
+            }
+        });
         Dispatcher.Invoke(() =>
         {
             // CLI progress is written to redirected stdout one line per completed file.
@@ -255,6 +289,7 @@ public partial class MainWindow : Window
             ProgressText.Text = "Starting...";
             SummaryText.Text = "Conversion in progress";
             Log.Clear();
+            _fileResults.Clear();
             _process = new Process { StartInfo = start, EnableRaisingEvents = true };
             _process.Start();
             var standard = ReadLinesAsync(_process.StandardOutput);
@@ -422,7 +457,26 @@ public partial class MainWindow : Window
             if (process.ExitCode != 0) throw new InvalidDataException(await errorTask);
             var converted = Directory.EnumerateFiles(temporary, "*.png").FirstOrDefault()
                 ?? throw new InvalidDataException("No preview PNG was created.");
-            var window = new PreviewWindow(source, converted) { Owner = this };
+            var baselineFolder = Path.Combine(temporary, "baseline");
+            Directory.CreateDirectory(baselineFolder);
+            var baselineStart = new ProcessStartInfo(cli)
+            {
+                UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            foreach (var arg in new[] { "convert", source, "--output", baselineFolder })
+                baselineStart.ArgumentList.Add(arg);
+            using var baselineProcess = Process.Start(baselineStart)
+                ?? throw new IOException("Cannot launch baseline converter.");
+            var baselineOutput = baselineProcess.StandardOutput.ReadToEndAsync();
+            var baselineError = baselineProcess.StandardError.ReadToEndAsync();
+            await baselineProcess.WaitForExitAsync();
+            await Task.WhenAll(baselineOutput, baselineError);
+            if (baselineProcess.ExitCode != 0)
+                throw new InvalidDataException(await baselineError);
+            var baselinePng = Directory.EnumerateFiles(baselineFolder, "*.png").FirstOrDefault()
+                ?? throw new InvalidDataException("Cannot generate baseline PNG.");
+            var window = new PreviewWindow(source, baselinePng, converted) { Owner = this };
             window.ShowDialog();
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Preview failed"); }
