@@ -208,8 +208,8 @@
     <TextBlock Text="Source files are preserved unless in-place replacement is enabled." VerticalAlignment="Center"
      Foreground="{StaticResource Muted}" FontSize="12"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-     <Button x:Name="CancelButton" Content="Cancel" Background="#DCE7F3" Foreground="#214A70"
-      IsEnabled="False" Margin="0,0,12,0" MinWidth="105" Click="Cancel_Click"/>
+     <Button x:Name="CancelButton" Content="Stop conversion" Background="#FCE8E8" Foreground="#A52B2B" ToolTip="Request a safe stop. Current files finish or discard staged output; already completed PNGs remain."
+      IsEnabled="False" Margin="0,0,12,0" MinWidth="145" Click="Cancel_Click"/>
      <Button x:Name="StartButton" Content="Start conversion  →" MinWidth="180" Click="Start_Click"/>
     </StackPanel>
    </Grid>
