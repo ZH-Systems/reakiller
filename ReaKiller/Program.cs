@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using ImageMagick;
 using FellowOakDicom;
 
@@ -82,6 +83,8 @@ public static class ReaKiller
             new ParallelOptions { MaxDegreeOfParallelism = options.Threads },
             (file, _) =>
             {
+                var fileResults = new List<Result>();
+                void Record(Result result) { results.Add(result); fileResults.Add(result); }
                 try
                 {
                     var relative = Path.GetRelativePath(sourceRoot, file);
@@ -93,7 +96,7 @@ public static class ReaKiller
                     var outputStem = $"{stem}_{extensionTag}";
                     if (options.DryRun)
                     {
-                        results.Add(new Result(file, Path.Combine(destinationSubfolder,
+                        Record(new Result(file, Path.Combine(destinationSubfolder,
                             outputStem + ".png"), "DRY_RUN", ""));
                         return ValueTask.CompletedTask;
                     }
@@ -147,7 +150,7 @@ public static class ReaKiller
                             var output = Path.Combine(destinationSubfolder, outputStem + pageSuffix + ".png");
                             if (File.Exists(output) && !options.Overwrite)
                             {
-                                results.Add(new Result(file, output, "SKIPPED", "Output exists (use --overwrite)."));
+                                Record(new Result(file, output, "SKIPPED", "Output exists (use --overwrite)."));
                                 skipped = true;
                                 continue;
                             }
@@ -241,7 +244,7 @@ public static class ReaKiller
                                     { Console.Error.WriteLine("Backup cleanup warning: " + cleanupError.Message); }
                                 }
                                 foreach (var item in staged)
-                                    results.Add(new Result(file, item.Output, "OK",
+                                    Record(new Result(file, item.Output, "OK",
                                         new FileInfo(item.Output).Length + " bytes"));
                             }
                             catch
@@ -262,14 +265,19 @@ public static class ReaKiller
                 }
                 catch (Exception ex)
                 {
-                    results.Add(new Result(file, "", "FAILED", ex.GetType().Name + ": " + ex.Message));
+                    Record(new Result(file, "", "FAILED", ex.GetType().Name + ": " + ex.Message));
                     Console.Error.WriteLine("FAILED " + file + ": " + ex.Message);
                 }
                 finally
                 {
                     var done = Interlocked.Increment(ref total);
+                    var status = fileResults.Any(r => r.Status == "FAILED") ? "FAILED" :
+                        fileResults.Any(r => r.Status == "SKIPPED") ? "SKIPPED" :
+                        fileResults.Any(r => r.Status == "OK") ? "SUCCEEDED" : "DRY_RUN";
+                    var detail = fileResults.FirstOrDefault(r => r.Status == "FAILED")?.Detail ?? "";
                     lock (progressLock)
                     {
+                        Console.WriteLine("REAKILLER_EVENT:" + JsonSerializer.Serialize(new { source = file, status, detail, done, total = inputFiles.Length }));
                         DrawProgress(done, inputFiles.Length);
                     }
                 }
