@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private Process? _process;
     private bool _running;
     private bool _cancelRequested;
+    private string? _stopMarker;
     private string? _lastReport;
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
     { ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".tif", ".tiff" };
@@ -159,10 +160,11 @@ public partial class MainWindow : Window
                     var color = status switch
                     {
                         "SUCCEEDED" => Brushes.ForestGreen,
+                        "STOPPED" => Brushes.DarkOrange,
                         "FAILED" => Brushes.Firebrick,
                         _ => Brushes.SlateGray
                     };
-                    _fileResults.Add(new FileResult(Path.GetFileName(source), status == "SUCCEEDED" ? "Succeeded" : status == "FAILED" ? "Failed" : "Skipped", detail, color));
+                    _fileResults.Add(new FileResult(Path.GetFileName(source), status == "SUCCEEDED" ? "Succeeded" : status == "FAILED" ? "Failed" : status == "STOPPED" ? "Stopped" : "Skipped", detail, color));
                     if (_fileResults.Count > 2000) _fileResults.RemoveAt(0);
                     if (total > 0) Progress.Value = 100.0 * done / total;
                     ProgressText.Text = $"{done:N0} / {total:N0} files";
@@ -242,6 +244,7 @@ public partial class MainWindow : Window
         }
 
         _lastReport = null;
+        _stopMarker = Path.Combine(Path.GetTempPath(), "reakiller-stop-" + Guid.NewGuid().ToString("N") + ".flag");
         OpenReportButton.IsEnabled = false;
         var start = new ProcessStartInfo(cli)
         {
@@ -252,6 +255,8 @@ public partial class MainWindow : Window
         };
         start.ArgumentList.Add("convert");
         start.ArgumentList.Add(source);
+        start.ArgumentList.Add("--stop-file");
+        start.ArgumentList.Add(_stopMarker);
         if (inPlace) start.ArgumentList.Add("--in-place");
         else
         {
@@ -332,6 +337,11 @@ public partial class MainWindow : Window
         {
             _process?.Dispose();
             _process = null;
+            if (_stopMarker is not null)
+            {
+                try { File.Delete(_stopMarker); } catch (IOException) { }
+                _stopMarker = null;
+            }
             _running = false;
             StartButton.IsEnabled = true;
             ScanButton.IsEnabled = true;
@@ -511,13 +521,18 @@ public partial class MainWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
+        if (!_running || _cancelRequested || _stopMarker is null) return;
         try
         {
+            File.WriteAllText(_stopMarker, "STOP");
             _cancelRequested = true;
-            ProgressText.Text = "Cancelling...";
-            if (_process is { HasExited: false })
-                _process.Kill(entireProcessTree: true);
+            CancelButton.IsEnabled = false;
+            ProgressText.Text = "Stopping after active conversions...";
+            SummaryText.Text = "Stop requested. Completed PNGs will remain. Uncommitted conversions will be discarded.";
         }
-        catch (InvalidOperationException) { }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Unable to request a safe stop: " + ex.Message, "Stop error");
+        }
     }
 }
