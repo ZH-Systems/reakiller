@@ -17,6 +17,23 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task DicExtensionIsRecognizedAndInvalidDicomIsReported()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "invalid.dic");
+            await File.WriteAllTextAsync(source, "not a DICOM image");
+            var output = Path.Combine(root, "converted");
+            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output]);
+            Assert.NotEqual(0, exit);
+            Assert.True(File.Exists(source));
+            Assert.False(File.Exists(Path.Combine(output, "invalid_dic.png")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CarestreamCmpWithStandardJpegSignatureConverts()
     {
         var root = NewFolder();
