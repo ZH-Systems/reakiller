@@ -17,6 +17,24 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task CarestreamCmpWithStandardJpegSignatureConverts()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "carestream.cmp");
+            var output = Path.Combine(root, "converted");
+            WriteJpeg(source);
+            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output,
+                "--adaptive-workers", "--threads", "2"]);
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(Path.Combine(output, "carestream_cmp.png")));
+            Assert.True(File.Exists(source));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task JpegOutputUsesJpgExtensionAndPreservesSource()
     {
         var root = NewFolder();
