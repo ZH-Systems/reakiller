@@ -13,7 +13,7 @@ namespace ReaKiller.Desktop;
 
 public partial class MainWindow : Window
 {
-    private sealed record FileResult(string FileName, string Status, string Detail, Brush StatusColor);
+    private sealed record FileResult(string FileName, string Status, string Detail, System.Windows.Media.Brush StatusColor);
     private readonly ObservableCollection<FileResult> _fileResults = new();
     private Process? _process;
     private bool _running;
