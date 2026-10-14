@@ -17,6 +17,34 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task ExplicitFileListConvertsOnlySelectedImages()
+    {
+        var root = NewFolder();
+        try
+        {
+            var first = Path.Combine(root, "first.img");
+            var second = Path.Combine(root, "second.jpg");
+            var ignored = Path.Combine(root, "ignored.tif");
+            WriteJpeg(first);
+            WriteJpeg(second);
+            WriteJpeg(ignored);
+            var list = Path.Combine(root, "selection.txt");
+            await File.WriteAllLinesAsync(list, [first, second]);
+            var output = Path.Combine(root, "converted");
+            var code = await ReaKiller.RunAsync(["convert", first, "--files-from", list,
+                "--output", output, "--name-pattern", "{index}_{name}"]);
+            Assert.Equal(0, code);
+            Assert.True(File.Exists(Path.Combine(output, "00001_first.png")));
+            Assert.True(File.Exists(Path.Combine(output, "00002_second.png")));
+            Assert.False(File.Exists(Path.Combine(output, "00003_ignored.png")));
+            Assert.True(File.Exists(first));
+            Assert.True(File.Exists(second));
+            Assert.True(File.Exists(ignored));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CustomNamingPatternIncludesIndexAndOriginalName()
     {
         var root = NewFolder();
