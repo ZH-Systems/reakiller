@@ -64,12 +64,14 @@
        <TextBlock Text="01  Source &amp; destination" Style="{StaticResource SectionTitle}" ToolTip="Choose source images and where converted PNG files are saved."/>
        <TextBlock x:Name="FileCountText" Text="No source selected" HorizontalAlignment="Right" Foreground="{StaticResource Muted}" DockPanel.Dock="Right"/>
       </DockPanel>
+      <CheckBox x:Name="SingleFileMode" Content="Select individual files instead of a folder" Margin="0,0,0,12" Checked="SingleFileMode_Changed" Unchecked="SingleFileMode_Changed" ToolTip="Select one or several individual image files rather than scanning a whole directory."/>
       <TextBlock ToolTip="You can paste a file/folder path or drop a folder onto the window." Text="SOURCE IMAGES" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,7"/>
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-       <TextBox x:Name="SourcePath" TextChanged="SourcePath_Changed" ToolTip="Paste a file or folder path, or browse for a folder"/>
+       <TextBox x:Name="SourcePath" IsReadOnly="False" TextChanged="SourcePath_Changed" ToolTip="Paste a file or folder path, or browse for a folder"/>
        <Button Grid.Column="1" Content="Browse..." Click="BrowseSource_Click" Margin="10,0,0,0" MinWidth="104"/>
       </Grid>
+      <TextBlock x:Name="SelectedFilesHint" Visibility="Collapsed" Text="Use Browse to select multiple images. Only selected files will convert." Foreground="#607B98" FontSize="12" Margin="0,7,0,0"/>
       <Grid Margin="0,16,0,13">
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <CheckBox x:Name="Recursive" Content="Include nested folders" ToolTip="Scan supported image files in all nested directories." IsChecked="True" Checked="ScanSetting_Changed" Unchecked="ScanSetting_Changed"/>
