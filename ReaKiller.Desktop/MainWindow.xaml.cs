@@ -23,7 +23,7 @@ public partial class MainWindow : Window
     private string? _selectionListFile;
     private readonly List<string> _selectedFiles = new();
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
-    { ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".pcx", ".cmp", ".tif", ".tiff" };
+    { ".img", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".pcx", ".cmp", ".tif", ".tiff" };
 
     public MainWindow()
     {
@@ -56,7 +56,7 @@ public partial class MainWindow : Window
             {
                 Title = "Select images to convert",
                 Multiselect = true,
-                Filter = "Supported images|*.img;*.dcm;*.dicom;*.jpg;*.jpeg;*.tif;*.tiff|All files|*.*"
+                Filter = "Supported images|*.img;*.dcm;*.dic;*.dicom;*.jpg;*.jpeg;*.tif;*.tiff|All files|*.*"
             };
             if (picker.ShowDialog() != true) return;
             _selectedFiles.Clear();
