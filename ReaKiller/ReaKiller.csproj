@@ -4,6 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Company>ZH-Systems</Company>
+    <Authors>ZH-Systems</Authors>
+    <Product>ReaKiller</Product>
+    <Copyright>Copyright (c) ZH-Systems</Copyright>
+    <Version>1.0.0</Version>
     <PublishAot>false</PublishAot>
   </PropertyGroup>
   <ItemGroup>
