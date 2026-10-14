@@ -8,7 +8,7 @@ using MessageBox = System.Windows.MessageBox;
 
 namespace ReaKiller.Desktop;
 
-public partial class PdfCompressionTab : UserControl
+public partial class PdfCompressionTab : System.Windows.Controls.UserControl
 {
     private sealed record PdfResult(string Name, string Before, string After, string Status);
     private readonly ObservableCollection<PdfResult> _results = new();
