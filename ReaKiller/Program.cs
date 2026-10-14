@@ -11,7 +11,7 @@ public static class ReaKiller
 {
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".tif", ".tiff"
+        ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".png", ".tif", ".tiff"
     };
 
     private sealed record Options(
@@ -401,7 +401,13 @@ public static class ReaKiller
                 return;
             }
             // Atomic replacement with a backup; original filename and timestamps retained.
+            var created = File.GetCreationTimeUtc(file);
+            var modified = File.GetLastWriteTimeUtc(file);
+            var accessed = File.GetLastAccessTimeUtc(file);
             File.Replace(temp, file, null);
+            File.SetCreationTimeUtc(file, created);
+            File.SetLastWriteTimeUtc(file, modified);
+            File.SetLastAccessTimeUtc(file, accessed);
             record(new Result(file, file, "OK", "Lossless PNG optimization completed."));
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
@@ -511,6 +517,8 @@ public static class ReaKiller
         string? output = null;
         bool recursive = false, overwrite = false, dryRun = false, inPlace = false;
         string compressionMode = "lossless";
+        string outputFormat = "png";
+        bool optimizeInPlace = false;
         string namePattern = "{name}_{ext}";
         string? stopFile = null;
         string? filesFrom = null;
