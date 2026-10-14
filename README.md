@@ -102,16 +102,11 @@ The desktop footer provides a red **Stop conversion** button while a batch is ru
 
 ## Windows publisher metadata and executable signing
 
-Both Windows binaries now declare **ZH-Systems** as their Company and Authors in the .NET project metadata. This controls product/company details but is **not** a trusted Windows digital signature.
+Both binaries specify `Company=ZH-Systems`, but Windows treats that as descriptive file metadata, not a trusted signature.
 
-To Authenticode-sign the actual executables, obtain a publicly trusted code-signing certificate issued to the applicable legal identity (with the desired ZH-Systems publisher name, subject to CA identity verification). For a PFX certificate that supports export and CI usage, configure these GitHub Actions **repository secrets**, never commit the PFX or password:
+**Recommended: Azure Artifact Signing.** Public-trust signing is available to eligible Canadian organizations. Apply for an Azure Artifact Signing account, pass identity validation, then create a public-trust certificate profile. Configure a Microsoft Entra app with a federated GitHub Actions identity and grant it the **Artifact Signing Certificate Profile Signer** role for the signing profile. The build pipeline supports Azure login via GitHub OIDC and the official `azure/artifact-signing-action@v2`, signing and verifying both bundled EXEs. The following repository secrets are required: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Repository variables: `ZH_ARTIFACT_SIGNING_ENDPOINT` (for example the endpoint Azure displays for your region), `ZH_ARTIFACT_SIGNING_ACCOUNT`, `ZH_ARTIFACT_SIGNING_PROFILE`, and `ZH_ARTIFACT_SIGNING_ENABLED=true` when fully configured. Leave enabled unset to build **unsigned** without Azure credentials.
 
-- `ZH_CODESIGN_PFX_BASE64`: Base64-encoded PFX (PowerShell on Windows: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\secure\\codesign.pfx"))`).
-- `ZH_CODESIGN_PFX_PASSWORD`: Password for that PFX.
-
-On pushes to `main`, the workflow signs `ReaKiller.exe` and `ReaKiller.Desktop.exe`, timestamps the signatures, verifies them using Windows SignTool, and uploads the bundle. If the secrets are missing, the build is **unsigned**. PR builds remain unsigned. Modern CA-issued code-signing private keys may need hardware-backed custody or hosted signing rather than an exportable PFX; in that case, this workflow must be adapted to the certificate provider's signing service.
-
-Confirm with Windows file Properties → Digital Signatures, or `Get-AuthenticodeSignature .\\ReaKiller.Desktop.exe`. A matching Company field alone does not suppress SmartScreen warnings. Code has been committed but the signed CI output has not been validated.
+Do **not** use the older PFX-in-GitHub-secrets approach for newly issued publicly trusted code-signing certificates: current CA/browser requirements call for protected hardware-backed private keys, which generally cannot be exported to a PFX file. Alternatively obtain an OV code-signing certificate from a CA such as DigiCert and use its supported hardware or cloud signing integration. Neither approach guarantees immediate Windows SmartScreen reputation.
 
 ## Source selection: folder or individual files
 
