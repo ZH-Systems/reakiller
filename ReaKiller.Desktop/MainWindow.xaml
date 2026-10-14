@@ -116,6 +116,7 @@
         <TextBox x:Name="MaxWidthInput"/>
        </StackPanel>
       </Grid>
+      <CheckBox x:Name="AdaptiveWorkers" Content="Automatically adjust workers for system load" IsChecked="True" Margin="0,15,0,0" ToolTip="Uses configured worker count as a maximum and adjusts admissions based on process CPU usage and GC memory pressure."/>
       <DockPanel Margin="0,18,0,5">
        <TextBlock Text="Compression effort" Style="{StaticResource FieldLabel}" ToolTip="Encoding effort, not a target percentage file-size reduction."/>
        <TextBlock x:Name="EffortValue" DockPanel.Dock="Right" Text="100%" FontSize="12" Foreground="{StaticResource Muted}"/>
