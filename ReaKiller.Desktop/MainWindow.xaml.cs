@@ -23,7 +23,7 @@ public partial class MainWindow : Window
     private string? _selectionListFile;
     private readonly List<string> _selectedFiles = new();
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
-    { ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".tif", ".tiff" };
+    { ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".pcx", ".cmp", ".tif", ".tiff" };
 
     public MainWindow()
     {
@@ -332,6 +332,7 @@ public partial class MainWindow : Window
         }
         if (Recursive.IsChecked == true) start.ArgumentList.Add("--recursive");
         if (Overwrite.IsChecked == true) start.ArgumentList.Add("--overwrite");
+        if (AdaptiveWorkers.IsChecked == true) start.ArgumentList.Add("--adaptive-workers");
         start.ArgumentList.Add("--threads");
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
@@ -374,6 +375,7 @@ public partial class MainWindow : Window
             Overwrite.IsEnabled = false;
             Compression.IsEnabled = false;
             Threads.IsEnabled = false;
+            AdaptiveWorkers.IsEnabled = false;
             MaxWidthInput.IsEnabled = false;
             NamePattern.IsEnabled = false;
             AutoContrast.IsEnabled = false;
@@ -431,6 +433,7 @@ public partial class MainWindow : Window
             Overwrite.IsEnabled = true;
             Compression.IsEnabled = true;
             Threads.IsEnabled = true;
+            AdaptiveWorkers.IsEnabled = true;
             MaxWidthInput.IsEnabled = true;
             NamePattern.IsEnabled = true;
             AutoContrast.IsEnabled = true;
