@@ -17,6 +17,24 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task FilenameWithSpaceBeforeExtensionIsNormalized()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "45706452997Kokolus Daniel .JPG");
+            var output = Path.Combine(root, "converted");
+            WriteJpeg(source);
+            var code = await ReaKiller.RunAsync(["convert", source, "--output", output,
+                "--name-pattern", "{name}"]);
+            Assert.Equal(0, code);
+            Assert.True(File.Exists(Path.Combine(output, "45706452997Kokolus Daniel.png")));
+            Assert.True(File.Exists(source));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DicExtensionIsRecognizedAndInvalidDicomIsReported()
     {
         var root = NewFolder();
