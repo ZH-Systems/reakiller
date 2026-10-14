@@ -110,7 +110,8 @@ public partial class MainWindow : Window
             || example.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || example.Contains('{') || example.Contains('}')
             || example.EndsWith('.') || example.EndsWith(' ');
-        NamePreview.Text = invalid ? "Invalid naming pattern" : "Example: " + example + ".png";
+        var extension = (OutputFormat?.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "jpg" ? ".jpg" : ".png";
+        NamePreview.Text = invalid ? "Invalid naming pattern" : "Example: " + example + extension;
         NamePreview.Foreground = invalid ? System.Windows.Media.Brushes.Firebrick : System.Windows.Media.Brushes.RoyalBlue;
     }
 
@@ -184,6 +185,7 @@ public partial class MainWindow : Window
     private void InPlace_Changed(object sender, RoutedEventArgs e)
     {
         if (OutputPath is null || BrowseOutput is null || InPlace is null) return;
+        if (InPlace.IsChecked == true && OptimizeInPlace?.IsChecked == true) OptimizeInPlace.IsChecked = false;
         var enable = InPlace.IsChecked != true && OptimizeInPlace?.IsChecked != true;
         OutputPath.IsEnabled = enable;
         BrowseOutput.IsEnabled = enable;
