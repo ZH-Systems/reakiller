@@ -17,6 +17,39 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task JpegOutputUsesJpgExtensionAndPreservesSource()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "photo.img");
+            var output = Path.Combine(root, "out");
+            WriteJpeg(source);
+            var status = await ReaKiller.RunAsync(["convert", source, "--output", output, "--format", "jpg"]);
+            Assert.Equal(0, status);
+            Assert.True(File.Exists(Path.Combine(output, "photo_img.jpg")));
+            Assert.True(File.Exists(source));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task OptimizeInPlaceNeverDeletesJpeg()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "photo.jpg");
+            WriteJpeg(source);
+            var original = await File.ReadAllBytesAsync(source);
+            var result = await ReaKiller.RunAsync(["convert", source, "--optimize-in-place"]);
+            Assert.Equal(0, result);
+            Assert.Equal(original, await File.ReadAllBytesAsync(source));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task ExplicitFileListConvertsOnlySelectedImages()
     {
         var root = NewFolder();
