@@ -14,56 +14,11 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private readonly ObservableCollection<PdfResult> _results = new();
     private readonly List<string> _files = new();
     private CancellationTokenSource? _stop;
-    private Process? _activeProcess;
 
     public PdfCompressionTab()
     {
         InitializeComponent();
         Results.ItemsSource = _results;
-        Loaded += (_, _) => CheckEngine();
-    }
-
-    private static string? FindGhostscript()
-    {
-        var paths = new List<string>();
-        foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
-        {
-            var gsRoot = Path.Combine(root, "gs");
-            if (Directory.Exists(gsRoot))
-                paths.AddRange(Directory.EnumerateFiles(gsRoot, "gswin64c.exe", SearchOption.AllDirectories));
-        }
-        var env = Environment.GetEnvironmentVariable("PATH") ?? "";
-        foreach (var dir in env.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            try
-            {
-                var file = Path.Combine(dir.Trim('"'), "gswin64c.exe");
-                if (File.Exists(file)) paths.Add(file);
-            }
-            catch (ArgumentException) { }
-        }
-        return paths.OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
-    }
-
-    private void CheckEngine()
-    {
-        try
-        {
-            var executable = FindGhostscript();
-            EngineStatus.Text = executable is null
-                ? "Ghostscript not detected. Install Ghostscript for Windows before compressing PDFs."
-                : "Ready: " + executable;
-        }
-        catch (Exception ex) { EngineStatus.Text = "Ghostscript check failed: " + ex.Message; }
-    }
-
-    private void CheckEngine_Click(object sender, RoutedEventArgs e) => CheckEngine();
-
-    private void GhostscriptLink_Click(object sender, RequestNavigateEventArgs e)
-    {
-        Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
-        e.Handled = true;
     }
 
     private void ChooseFiles_Click(object sender, RoutedEventArgs e)
@@ -100,12 +55,6 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (_stop is not null) return;
-        var gs = FindGhostscript();
-        if (gs is null)
-        {
-            MessageBox.Show("Ghostscript was not found. Install Ghostscript for Windows and try again.", "PDF compression");
-            return;
-        }
         if (_files.Count == 0 || _files.Any(p => !File.Exists(p)))
         {
             MessageBox.Show("Select existing PDF documents first.", "PDF compression");
@@ -151,39 +100,10 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                     }
                     else
                     {
-                        var start = new ProcessStartInfo(gs)
-                        {
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            RedirectStandardError = true,
-                            RedirectStandardOutput = true
-                        };
-                        foreach (var arg in new[]
-                        {
-                            "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=pdfwrite",
-                            "-dCompatibilityLevel=1.6", "-dDetectDuplicateImages=true",
-                            "-dCompressFonts=true", "-dSubsetFonts=true",
-                            "-dPDFSETTINGS=/" + preset, "-sOutputFile=" + temp, source
-                        }) start.ArgumentList.Add(arg);
-                        using var process = new Process { StartInfo = start };
-                        _activeProcess = process;
-                        process.Start();
-                        var stdout = process.StandardOutput.ReadToEndAsync();
-                        var stderr = process.StandardError.ReadToEndAsync();
-                        await process.WaitForExitAsync(tokenSource.Token);
-                        var errors = await stderr;
-                        await stdout;
-                        if (process.ExitCode != 0)
-                            throw new IOException($"Ghostscript exit code {process.ExitCode}. {errors.Trim()}");
-                        await using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read))
-                        {
-                            if (stream.Length < 8) throw new IOException("Generated PDF is empty.");
-                            var header = new byte[5];
-                            await stream.ReadExactlyAsync(header);
-                            if (System.Text.Encoding.ASCII.GetString(header) != "%PDF-")
-                                throw new IOException("Output does not contain a PDF signature.");
-                        }
-                        var written = new FileInfo(temp).Length;
+                        var result = await Task.Run(() =>
+                            NativePdfOptimizer.Compress(source, temp, preset, tokenSource.Token), tokenSource.Token);
+                        var written = result.OutputBytes;
+
                         if (SkipLarger.IsChecked == true && written >= before)
                         {
                             status = "Skipped (not smaller)";
@@ -210,7 +130,6 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                 }
                 finally
                 {
-                    _activeProcess = null;
                     try { if (File.Exists(temp)) File.Delete(temp); } catch (IOException) { }
                 }
                 _results.Add(new PdfResult(Path.GetFileName(source), Size(before), after, status));
@@ -233,8 +152,6 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
         _stop?.Cancel();
-        try { if (_activeProcess is { HasExited: false }) _activeProcess.Kill(entireProcessTree: true); }
-        catch (InvalidOperationException) { }
         StopButton.IsEnabled = false;
     }
 }
