@@ -119,3 +119,26 @@ ReaKiller.exe convert "D:\Images\first.img" --files-from "D:\Images\selection.tx
 ```
 
 With selected files, non-in-place outputs go directly into the chosen output directory rather than inheriting each file's original directory. Duplicate resolved names are rejected before processing. In-place conversion creates PNGs beside their respective originals and preserves the current source-preservation rules.
+
+## Free self-signed ZH-Systems Windows executables
+
+The repository includes `scripts/Sign-ReaKiller.ps1` to sign both published Windows executables locally, without Azure or a paid certificate.
+
+1. Download and extract the `ReaKiller-Desktop-win-x64` artifact from GitHub Actions onto the Windows PC where you want to sign. Do not sign inside an archive.
+2. From PowerShell, run:
+
+```powershell
+.\scripts\Sign-ReaKiller.ps1 -BundlePath "C:\ReaKiller" -CreateCertificate
+```
+
+The script creates a non-exportable RSA 3072-bit SHA-256 code-signing certificate named `CN=ZH-Systems` in your **CurrentUser Personal** certificate store, signs `ReaKiller.exe` and `ReaKiller.Desktop.exe`, and exports only the **public** certificate (`ZH-Systems-Public-CodeSigning.cer`) to the bundle. On subsequent releases, run the same command without `-CreateCertificate` to reuse the certificate.
+
+To trust this certificate on **your own Windows user profile**, you can use the interactive `-TrustOnThisMachine` flag. It asks for explicit confirmation before importing the public certificate into CurrentUser Trusted Root and Trusted Publishers. Trusting your own self-signed root should only be done on machines you control. For another trusted device, securely confirm the public certificate fingerprint out of band before installing that `.cer` file to the appropriate stores.
+
+To inspect an EXE:
+
+```powershell
+Get-AuthenticodeSignature "C:\ReaKiller\ReaKiller.Desktop.exe" | Format-List Status,StatusMessage,SignerCertificate
+```
+
+**Limitations:** These signatures are not publicly trusted and may still show **Unknown Publisher** or SmartScreen warnings on unconfigured computers. Creating a self-signed certificate does not earn Windows SmartScreen reputation. The private key stays in the local user certificate store, not GitHub. No free public certificate is created. Keep the signed files together; changing an EXE afterward invalidates its signature. The GitHub Actions artifact remains unsigned unless a separate signing integration is configured.
