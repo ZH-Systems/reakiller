@@ -172,11 +172,6 @@
       <TextBlock x:Name="SummaryText" Text="Select images and start a conversion." Foreground="#6C7785" FontSize="12" Margin="0,10,0,0"/>
      </StackPanel>
     </Border>
-    </TabItem>
-  <TabItem Header="PDF compression">
-   <local:PdfCompressionTab />
-  </TabItem>
-  </TabControl>
   <Border Grid.Row="2" Background="White" BorderBrush="#DFE4EC" BorderThickness="1" CornerRadius="7" ClipToBounds="True">
      <Grid>
       <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -208,6 +203,9 @@
     </Expander>
    </Grid>
   </Grid>
+  </TabItem>
+  <TabItem Header="PDF compression"><local:PdfCompressionTab /></TabItem>
+  </TabControl>
   <Border Grid.Row="2" Background="White" BorderBrush="#E0E4EA" BorderThickness="0,1,0,0">
    <Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding SelectedIndex, ElementName=FeatureTabs}" Value="1"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
    <Grid Margin="24,0">
