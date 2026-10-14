@@ -84,6 +84,7 @@
        Margin="0,11,0,0" Checked="InPlace_Changed" Unchecked="InPlace_Changed"
        ToolTip="Destructive mode. Originals are deleted only after their PNG outputs have been written and verified."/>
       <TextBlock Text="Use a backup when replacing originals." Margin="22,4,0,0" FontSize="11" Foreground="#9A5D2C"/>
+      <CheckBox x:Name="OptimizeInPlace" Content="Optimize PNG in place (same dimensions)" Margin="0,14,0,0" Checked="OptimizeInPlace_Changed" Unchecked="OptimizeInPlace_Changed" ToolTip="Lossless PNG recompression only. Never changes resolution; replaces only if smaller. JPEG and medical formats are skipped."/>
       <TextBlock Text="Filename pattern" Style="{StaticResource FieldLabel}" Margin="0,18,0,6" ToolTip="Control output names using placeholders. The PNG extension is added automatically."/>
       <TextBox x:Name="NamePattern" Text="{}{name}_{ext}" TextChanged="NamePattern_Changed"
        ToolTip="Supported placeholders: {name}, {ext}, {index}, {date}."/>
@@ -91,6 +92,11 @@
        ToolTip="Name is original stem; ext is original extension; index is five-digit sequence; date is modified date."/>
       <TextBlock x:Name="NamePreview" Text="Example: I11624_img.png" FontSize="11" Foreground="#2763C4" Margin="0,5,0,0"/>
       <Border Height="1" Background="#E4E8EE" Margin="0,23,0,20"/>
+      <TextBlock Text="Output format" Style="{StaticResource FieldLabel}" Margin="0,0,0,7"/>
+      <ComboBox x:Name="OutputFormat" SelectedIndex="0" SelectionChanged="OutputFormat_Changed" Margin="0,0,0,17">
+       <ComboBoxItem Content="PNG — lossless" Tag="png"/>
+       <ComboBoxItem Content="JPEG — smaller, lossy" Tag="jpg"/>
+      </ComboBox>
       <TextBlock Text="Output settings" Style="{StaticResource Heading}" ToolTip="Configure compression, processing threads, and dimensions." Margin="0,0,0,15"/>
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="78"/><ColumnDefinition Width="12"/><ColumnDefinition Width="88"/></Grid.ColumnDefinitions>
