@@ -426,6 +426,21 @@ public static class ReaKiller
         var report = Path.Combine(options.InPlace || options.OptimizeInPlace ? sourceRoot : Path.GetFullPath(options.Destination),
             "reakiller-report.csv");
         var rows = new List<string> { "Source,Output,Status,Detail" };
+        // Ensure all batch outputs are distinct before starting any child.
+        var planned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < files.Length; i++)
+        {
+            var relative = File.Exists(options.Source) ? "" : Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, files[i])) ?? "";
+            var folder = options.InPlace || options.OptimizeInPlace ? Path.GetDirectoryName(files[i])! :
+                Path.Combine(Path.GetFullPath(options.Destination), relative);
+            var stem = ResolveName(options.NamePattern, files[i], i + 1);
+            var target = Path.Combine(folder, stem + (options.OutputFormat == "jpg" ? ".jpg" : ".png"));
+            if (!planned.Add(target))
+            {
+                Console.Error.WriteLine("Naming collision across batches: " + target);
+                return 2;
+            }
+        }
         var failed = false;
         for (var start = 0; start < files.Length; start += options.BatchSize)
         {
@@ -449,6 +464,7 @@ public static class ReaKiller
                 child.StartInfo.ArgumentList.Add("--index-offset");
                 child.StartInfo.ArgumentList.Add(start.ToString(CultureInfo.InvariantCulture));
                 Console.WriteLine($"Starting isolated batch {start / options.BatchSize + 1} ({count} files).");
+                if (File.Exists(report)) File.Delete(report);
                 child.Start();
                 var stdout = Task.Run(async () =>
                 {
