@@ -115,6 +115,14 @@ public static class ReaKiller
         var results = new ConcurrentBag<Result>();
         var total = 0;
         var progressLock = new object();
+        var lastHandleCount = 0;
+        static int ReadHandleCount()
+        {
+            if (!OperatingSystem.IsWindows()) return 0;
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            return process.HandleCount;
+        }
+
 
         await Parallel.ForEachAsync(inputFiles,
             new ParallelOptions { MaxDegreeOfParallelism = options.Threads },
@@ -342,6 +350,19 @@ public static class ReaKiller
                 finally
                 {
                     var done = Interlocked.Increment(ref total);
+                    if (done % 250 == 0)
+                    {
+                        var handles = ReadHandleCount();
+                        if (handles > 0)
+                        {
+                            var growth = handles - Interlocked.Exchange(ref lastHandleCount, handles);
+                            Console.Error.WriteLine($"ReaKiller resources after {done} files: {handles} process handles (delta {growth:+#;-#;0}).");
+                        }
+                        // Encourage timely finalization of any abandoned native wrappers
+                        // during very long batches. This cannot correct a true native leak.
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                    }
                     var status = fileResults.Any(r => r.Status == "FAILED") ? "FAILED" :
                         fileResults.Any(r => r.Status == "STOPPED") ? "STOPPED" :
                         fileResults.Any(r => r.Status == "SKIPPED") ? "SKIPPED" :
