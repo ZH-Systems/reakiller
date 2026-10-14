@@ -62,20 +62,20 @@
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <TextBox x:Name="SourcePath" IsReadOnly="False" TextChanged="SourcePath_Changed" ToolTip="Folder path, or the current individual-file selection."/>
-       <Button Grid.Column="1" Content="Browse" Click="BrowseSource_Click" Margin="8,0,0,0" MinWidth="74" ToolTip="Select source folders or individual image files."/>
+       <Button Grid.Column="1" Content="Browse" Style="{StaticResource SecondaryButton}" Click="BrowseSource_Click" Margin="8,0,0,0" MinWidth="74" ToolTip="Select source folders or individual image files."/>
       </Grid>
       <TextBlock x:Name="SelectedFilesHint" Visibility="Collapsed" Text="Only the files you select will be converted." Margin="0,7,0,0" Foreground="{StaticResource Muted}" FontSize="11"/>
       <Grid Margin="0,12,0,0">
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <CheckBox x:Name="Recursive" Content="Include subfolders" IsChecked="True" VerticalAlignment="Center" Checked="ScanSetting_Changed" Unchecked="ScanSetting_Changed"
         ToolTip="Include image files from nested folders."/>
-       <Button x:Name="ScanButton" Grid.Column="1" Content="Scan files" Click="Scan_Click" ToolTip="Count supported images before conversion."/>
+       <Button x:Name="ScanButton" Grid.Column="1" Content="Scan files" Style="{StaticResource SecondaryButton}" Click="Scan_Click" ToolTip="Count supported images before conversion."/>
       </Grid>
       <TextBlock Text="Destination" Style="{StaticResource FieldLabel}" Margin="0,19,0,6" ToolTip="Choose a separate output directory."/>
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <TextBox x:Name="OutputPath" ToolTip="Output folder for converted PNGs."/>
-       <Button x:Name="BrowseOutput" Grid.Column="1" Content="Browse" Click="BrowseOutput_Click" Margin="8,0,0,0" MinWidth="74"/>
+       <Button x:Name="BrowseOutput" Grid.Column="1" Content="Browse" Style="{StaticResource SecondaryButton}" Click="BrowseOutput_Click" Margin="8,0,0,0" MinWidth="74"/>
       </Grid>
       <CheckBox x:Name="InPlace" Content="Replace original files after successful conversion"
        Margin="0,11,0,0" Checked="InPlace_Changed" Unchecked="InPlace_Changed"
@@ -133,11 +133,11 @@
       </DockPanel>
       <Slider x:Name="SharpenSlider" Minimum="0" Maximum="2" Value="0" TickFrequency="0.1" IsSnapToTickEnabled="True"
        ValueChanged="SharpenSlider_Changed"/>
-      <Button Content="Preview adjustments" Click="Preview_Click" Margin="0,17,0,0" HorizontalAlignment="Left"
+      <Button Content="Preview adjustments" Style="{StaticResource SecondaryButton}" Click="Preview_Click" Margin="0,17,0,0" HorizontalAlignment="Left"
        ToolTip="Compare an unmodified PNG rendering with your current adjustments."/>
       <WrapPanel Margin="0,15,0,0">
-       <Button Content="Save preset" Click="SavePreset_Click" ToolTip="Save these settings as a JSON file."/>
-       <Button Content="Load preset" Click="LoadPreset_Click" Margin="8,0,0,0" ToolTip="Load saved JSON settings."/>
+       <Button Content="Save preset" Style="{StaticResource SecondaryButton}" Click="SavePreset_Click" ToolTip="Save these settings as a JSON file."/>
+       <Button Content="Load preset" Style="{StaticResource SecondaryButton}" Click="LoadPreset_Click" Margin="8,0,0,0" ToolTip="Load saved JSON settings."/>
       </WrapPanel>
      </StackPanel>
     </ScrollViewer>
@@ -149,7 +149,7 @@
       <TextBlock Text="Conversion activity" FontSize="23" FontWeight="SemiBold" Foreground="#202832" ToolTip="Conversion status and results appear here."/>
       <TextBlock Text="File-by-file results from the current job" FontSize="12" Foreground="#6C7785" Margin="0,5,0,0"/>
      </StackPanel>
-     <Button x:Name="OpenReportButton" Content="Open CSV report" DockPanel.Dock="Right" HorizontalAlignment="Right"
+     <Button x:Name="OpenReportButton" Content="Open CSV report" Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right" HorizontalAlignment="Right"
       Click="OpenReport_Click" IsEnabled="False" VerticalAlignment="Center" ToolTip="Open the complete CSV conversion report."/>
     </DockPanel>
     <Border Grid.Row="1" Background="White" BorderBrush="#DFE4EC" BorderThickness="1" CornerRadius="7" Margin="0,22,0,18" Padding="18,14">
@@ -199,7 +199,7 @@
     <TextBlock Text="Files are processed locally. Originals are kept unless replacement is enabled."
      VerticalAlignment="Center" Foreground="#6C7785" FontSize="12"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-     <Button x:Name="CancelButton" Content="Stop conversion" MinWidth="130" IsEnabled="False"
+     <Button x:Name="CancelButton" Content="Stop conversion" Style="{StaticResource DangerButton}" MinWidth="130" IsEnabled="False"
       Click="Cancel_Click" ToolTip="Request a safe stop. Completed output files remain." Margin="0,0,10,0"/>
      <Button x:Name="StartButton" Content="Start conversion" MinWidth="148" Click="Start_Click"/>
     </StackPanel>
