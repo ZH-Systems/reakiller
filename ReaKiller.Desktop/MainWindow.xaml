@@ -87,7 +87,7 @@
        <StackPanel>
         <TextBlock Text="OUTPUT FILE NAMING" Foreground="#274763" FontWeight="SemiBold"
          ToolTip="Use placeholders to rename converted PNGs. .png is always appended automatically."/>
-        <TextBox x:Name="NamePattern" Text="{name}_{ext}" TextChanged="NamePattern_Changed"
+        <TextBox x:Name="NamePattern" Text="{}{name}_{ext}" TextChanged="NamePattern_Changed"
          Margin="0,9,0,5" ToolTip="Tokens: {name} original name, {ext} original extension, {index} sequential number, {date} original modified date."/>
         <TextBlock Text="Tokens: {name}   {ext}   {index}   {date}" FontSize="12" Foreground="#607B98"
          ToolTip="Index is a five-digit sequential number. Date uses yyyyMMdd from source file modified date."/>
