@@ -16,7 +16,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -50,8 +50,8 @@ public static class ReaKiller
         var sourceRoot = sourceIsFile
             ? Path.GetDirectoryName(Path.GetFullPath(options.Source))!
             : Path.GetFullPath(options.Source);
-        var destination = options.InPlace ? sourceRoot : Path.GetFullPath(options.Destination);
-        if (!options.InPlace && !sourceIsFile && IsUnderOrEqual(destination, sourceRoot))
+        var destination = options.InPlace || options.OptimizeInPlace ? sourceRoot : Path.GetFullPath(options.Destination);
+        if (!options.InPlace && !options.OptimizeInPlace && !sourceIsFile && IsUnderOrEqual(destination, sourceRoot))
         {
             Console.Error.WriteLine("Output directory must be outside the input directory to avoid accidental recursive processing.");
             return 2;
@@ -96,9 +96,9 @@ public static class ReaKiller
                 return 2;
             }
             var relativeFolder = options.FilesFrom is not null ? "" : Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
-            var targetFolder = options.InPlace && options.FilesFrom is not null
+            var targetFolder = (options.InPlace || options.OptimizeInPlace) && options.FilesFrom is not null
                 ? Path.GetDirectoryName(file)! : Path.GetFullPath(Path.Combine(destination, relativeFolder));
-            var target = Path.Combine(targetFolder, stem + ".png");
+            var target = Path.Combine(targetFolder, stem + (options.OutputFormat == "jpg" ? ".jpg" : ".png"));
             if (assignedNames.TryGetValue(target, out var other))
             {
                 Console.Error.WriteLine($"Naming collision: {file} and {other} both produce {target}. Add {{index}} or {{name}} to the pattern.");
@@ -129,10 +129,22 @@ public static class ReaKiller
                         return ValueTask.CompletedTask;
                     }
                     var relative = Path.GetRelativePath(sourceRoot, file);
-                    var destinationSubfolder = options.InPlace && options.FilesFrom is not null
+                    var destinationSubfolder = (options.InPlace || options.OptimizeInPlace) && options.FilesFrom is not null
                         ? Path.GetDirectoryName(file)!
                         : options.FilesFrom is not null ? destination
                         : Path.Combine(destination, Path.GetDirectoryName(relative) ?? "");
+                    if (options.OptimizeInPlace)
+                    {
+                        try
+                        {
+                            OptimizeOriginalFile(file, options, result => Record(result));
+                        }
+                        catch (Exception ex)
+                        {
+                            Record(new Result(file, "", "FAILED", ex.Message));
+                        }
+                        return ValueTask.CompletedTask;
+                    }
                     // Include the original extension to avoid collisions such as image.jpg and image.tif.
                     var stem = Path.GetFileNameWithoutExtension(file);
                     var extensionTag = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
@@ -140,7 +152,7 @@ public static class ReaKiller
                     if (options.DryRun)
                     {
                         Record(new Result(file, Path.Combine(destinationSubfolder,
-                            outputStem + ".png"), "DRY_RUN", ""));
+                            outputStem + (options.OutputFormat == "jpg" ? ".jpg" : ".png")), "DRY_RUN", ""));
                         return ValueTask.CompletedTask;
                     }
 
@@ -190,7 +202,7 @@ public static class ReaKiller
                         {
                             var image = pages[index];
                             var pageSuffix = pages.Count > 1 ? $"_p{index + 1:0000}" : "";
-                            var output = Path.Combine(destinationSubfolder, outputStem + pageSuffix + ".png");
+                            var output = Path.Combine(destinationSubfolder, outputStem + pageSuffix + (options.OutputFormat == "jpg" ? ".jpg" : ".png"));
                             if (File.Exists(output) && !options.Overwrite)
                             {
                                 Record(new Result(file, output, "SKIPPED", "Output exists (use --overwrite)."));
@@ -227,10 +239,11 @@ public static class ReaKiller
                                 image.Strip();
                                 image.Settings.SetDefine(MagickFormat.Png, "compression-level", Math.Clamp((int)Math.Round(options.CompressionEffort * 9.0 / 100), 0, 9).ToString(CultureInfo.InvariantCulture));
                                 image.Settings.SetDefine(MagickFormat.Png, "compression-filter", "5");
-                                image.Write(temporary, MagickFormat.Png);
+                                if (options.OutputFormat == "jpg") image.Quality = 90;
+                                image.Write(temporary, options.OutputFormat == "jpg" ? MagickFormat.Jpeg : MagickFormat.Png);
                                 using (var check = new MagickImage())
                                 {
-                                    check.Read(temporary, MagickFormat.Png);
+                                    check.Read(temporary, options.OutputFormat == "jpg" ? MagickFormat.Jpeg : MagickFormat.Png);
                                     if (check.Width != image.Width || check.Height != image.Height)
                                         throw new InvalidDataException("Output PNG validation failed: dimensions mismatch.");
                                 }
@@ -351,6 +364,47 @@ public static class ReaKiller
         var skipped = ordered.Count(r => r.Status == "SKIPPED");
         Console.WriteLine($"Complete: {succeeded} outputs, {skipped} skipped, {failed} failed, {stopped} stopped.");
         return stopped > 0 ? 3 : failed > 0 ? 1 : 0;
+    }
+
+    private static void OptimizeOriginalFile(string file, Options options, Action<Result> record)
+    {
+        var ext = Path.GetExtension(file).ToLowerInvariant();
+        // Conservative optimization: PNG only. JPEG re-encoding changes pixels;
+        // DICOM and TIFF may contain medical data and metadata not safely round-trippable.
+        if (ext != ".png")
+        {
+            record(new Result(file, "", "SKIPPED", "Safe in-place optimization currently supports PNG only; JPEG/DICOM/TIFF are left unchanged."));
+            return;
+        }
+        var sourceSize = new FileInfo(file).Length;
+        var temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using var image = new MagickImage(file);
+            var width = image.Width;
+            var height = image.Height;
+            image.Settings.SetDefine(MagickFormat.Png, "compression-level", "9");
+            image.Write(temp, MagickFormat.Png);
+            using (var check = new MagickImage(temp))
+            {
+                if (check.Width != width || check.Height != height)
+                    throw new InvalidDataException("Optimized output dimensions differ.");
+            }
+            if (new FileInfo(temp).Length >= sourceSize)
+            {
+                record(new Result(file, "", "SKIPPED", "Already smaller than optimized output."));
+                return;
+            }
+            if (options.StopFile is not null && File.Exists(options.StopFile))
+            {
+                record(new Result(file, "", "STOPPED", "Stopped before replacement."));
+                return;
+            }
+            // Atomic replacement with a backup; original filename and timestamps retained.
+            File.Replace(temp, file, null);
+            record(new Result(file, file, "OK", "Lossless PNG optimization completed."));
+        }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 
     private static async Task<int> RunInteractiveAsync()
@@ -485,6 +539,8 @@ public static class ReaKiller
                 case "--overwrite": overwrite = true; break;
                 case "--dry-run": dryRun = true; break;
                 case "--in-place": inPlace = true; break;
+                case "--optimize-in-place": optimizeInPlace = true; break;
+                case "--format": outputFormat = Value().ToLowerInvariant(); break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--auto-contrast": autoContrast = true; break;
                 case "--name-pattern": namePattern = Value(); break;
@@ -515,13 +571,16 @@ public static class ReaKiller
             }
         }
 
-        if (!inPlace && string.IsNullOrWhiteSpace(output))
+        if (!inPlace && !optimizeInPlace && string.IsNullOrWhiteSpace(output))
             throw new ArgumentException("Specify an output directory using --output, or select --in-place.");
-        if (inPlace && output is not null)
+        if ((inPlace || optimizeInPlace) && output is not null)
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
+        if (outputFormat is not ("png" or "jpg")) throw new ArgumentException("--format must be png or jpg.");
+        if (optimizeInPlace && inPlace) throw new ArgumentException("Select either --optimize-in-place or --in-place.");
+        if (optimizeInPlace && (maxWidth is not null || maxHeight is not null || contrast != 0 || sharpen != 0 || autoContrast)) throw new ArgumentException("Optimization mode cannot resize or enhance images.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace);
     }
 
     private static void ValidateNamePattern(string pattern)
@@ -573,7 +632,7 @@ public static class ReaKiller
             Usage:
               ReaKiller.exe convert <file-or-directory> --output <directory> [options]
             Options:
-              --in-place              Write PNG beside source, then delete converted source
+              --format png|jpg        Output format (default png)\n              --optimize-in-place     Conservative same-format optimization (PNG only)\n              --in-place              Write converted image beside source, then delete converted source
               --recursive, -r         Traverse subdirectories
               --threads <n>          Parallel workers (default up to 4)
               --max-width <pixels>   Optional maximum output width
