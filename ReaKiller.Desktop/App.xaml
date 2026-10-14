@@ -37,6 +37,14 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#E9EDF2"/>
+            <Setter Property="Foreground" Value="#334155"/>
+        </Style>
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#FAE7E7"/>
+            <Setter Property="Foreground" Value="#9B3030"/>
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="Padding" Value="9,7"/>
             <Setter Property="BorderBrush" Value="#C9D1DB"/>
