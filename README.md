@@ -143,13 +143,13 @@ Get-AuthenticodeSignature "C:\ReaKiller\ReaKiller.Desktop.exe" | Format-List Sta
 
 **Limitations:** These signatures are not publicly trusted and may still show **Unknown Publisher** or SmartScreen warnings on unconfigured computers. Creating a self-signed certificate does not earn Windows SmartScreen reputation. The private key stays in the local user certificate store, not GitHub. No free public certificate is created. Keep the signed files together; changing an EXE afterward invalidates its signature. The GitHub Actions artifact remains unsigned unless a separate signing integration is configured.
 
-## PDF compression tab
+## PDF compression tab (Ghostscript)
 
-ReaKiller Desktop now includes **PDF compression** as a separate tab alongside image conversion. Select one or multiple PDF files, choose an output directory, and select a preset: **High quality** (`/printer`), **Balanced** (`/ebook`), or **Smallest files** (`/screen`). Processing is local and sequential. Results show before/after sizes; cancellation stops the active converter process and removes incomplete temporary outputs.
+The PDF Compression tab uses the separately installed **Ghostscript** executable (`gswin64c.exe`). It does not bundle or install Ghostscript. Install the 64-bit Windows release manually from https://ghostscript.com/releases/gsdnld.html on machines that need PDF compression. The app locates Ghostscript beneath Program Files or on PATH and displays its status in the PDF tab.
 
-**Prerequisite:** Install a compatible 64-bit Windows **Ghostscript** distribution from [ghostscript.com](https://ghostscript.com/releases/gsdnld.html). ReaKiller looks for `gswin64c.exe` in the Ghostscript installation directory under Program Files or in PATH. Ghostscript is **not bundled** with ReaKiller; it has AGPL/commercial licensing that should be reviewed before distributing integrated binaries. The PDF tab cannot compress files without the external executable.
+The presets use Ghostscript's `pdfwrite` device: **High quality** (`/printer`), **Balanced** (`/ebook`), and **Smallest file** (`/screen`). These differ in image downsampling and compression; the Balanced preset can dramatically reduce image-heavy PDFs, though the actual reduction depends on each document.
 
-Existing PDFs are never deleted or modified. Output is `<original_name>_compressed.pdf` in the selected destination; if it already exists, that file is skipped. The default “Keep smaller original” preference skips publishing compressed output when it is not actually smaller. Ghostscript may alter embedded images, fonts, interactive forms, annotations, links, accessibility tags, and metadata. **Keep the source PDFs and review outputs** before using them for archival or clinical records. Password-protected, digitally signed, malformed, or restricted PDFs may fail or lose original digital signature validity when rewritten. Output verification currently checks the PDF file signature, not detailed semantic or visual equivalence.
+Output is written as `<name>_compressed.pdf` in the selected destination. Source PDFs are preserved, existing outputs are skipped, incomplete temporary files are cleaned up, and the default setting skips new outputs that are not smaller. Rewriting a PDF can affect quality, forms, annotations, metadata and digital signatures, so verify important documents before use. Ghostscript's AGPL/commercial licensing applies; ReaKiller does not redistribute it.
 
 ## Image output selection and in-place optimization
 
@@ -159,8 +159,3 @@ A separate **Optimize PNG in place (same dimensions)** option attempts to recomp
 
 Source filesystem timestamps are restored after successful replacement. File-level metadata (for example extended attributes, security ACLs, application-specific chunks or profiles) and byte-for-byte pixel equivalence are not yet covered by a dedicated optimization regression test; test on copies before using on sensitive records. Optimization may not reduce already optimized PNGs. The original remains untouched when the new file is not smaller.
 
-## Native PDF compression (current implementation)
-
-PDF compression now runs inside the ReaKiller desktop app using **PDFsharp 6.2.4 (MIT)**. Ghostscript is **not installed or invoked**, and no external converter is necessary. The engine loads a PDF in modification mode, enables maximum Flate/content-stream compression, saves to a temporary PDF, re-opens it, and validates the page count before publishing. Source PDFs are not modified. Existing destination files are skipped, and the default setting discards outputs that are not smaller.
-
-**Important limitations:** the current native implementation is **lossless stream optimization**, not an equivalent to Ghostscript's `/ebook` or `/screen` image downsampling. The three UI choices are currently equivalent in compression behaviour; they are retained for future image recompression. A 67% reduction is **not expected** for image-heavy, already compressed PDFs. Embedded image recompression, forms, encryption, signatures, complex annotations and appearance fidelity need more validation; do not use without manually checking critical dental records. PDF rewriting can invalidate digital signatures. Earlier README notes referring to Ghostscript describe the former engine and are superseded by this section.
