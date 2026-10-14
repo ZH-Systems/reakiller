@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
@@ -16,7 +17,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers, string[] IncludeExtensions, string[] ExcludeExtensions);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers, string[] IncludeExtensions, string[] ExcludeExtensions, int BatchSize, int IndexOffset);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -91,6 +92,9 @@ public static class ReaKiller
         }).ToArray();
         Console.WriteLine($"Extension filter: {inputFiles.Length} file(s) selected.");
 
+        if (options.BatchSize > 0 && inputFiles.Length > options.BatchSize)
+            return await RunIsolatedBatches(args, options, inputFiles);
+
         // Resolve names before conversion so jobs cannot overwrite each other's outputs.
         var outputNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var assignedNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -98,13 +102,13 @@ public static class ReaKiller
         {
             var file = inputFiles[i];
             string stem;
-            try { stem = ResolveName(options.NamePattern, file, i + 1); }
+            try { stem = ResolveName(options.NamePattern, file, i + 1 + options.IndexOffset); }
             catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
             {
                 Console.Error.WriteLine("Naming error for " + file + ": " + ex.Message);
                 return 2;
             }
-            var relativeFolder = options.FilesFrom is not null ? "" : Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
+            var relativeFolder = options.FilesFrom is not null && sourceIsFile ? "" : Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
             var targetFolder = (options.InPlace || options.OptimizeInPlace) && options.FilesFrom is not null
                 ? Path.GetDirectoryName(file)! : Path.GetFullPath(Path.Combine(destination, relativeFolder));
             var target = Path.Combine(targetFolder, stem + (options.OutputFormat == "jpg" ? ".jpg" : ".png"));
@@ -150,7 +154,7 @@ public static class ReaKiller
                     var relative = Path.GetRelativePath(sourceRoot, file);
                     var destinationSubfolder = (options.InPlace || options.OptimizeInPlace) && options.FilesFrom is not null
                         ? Path.GetDirectoryName(file)!
-                        : options.FilesFrom is not null ? destination
+                        : options.FilesFrom is not null && sourceIsFile ? destination
                         : Path.Combine(destination, Path.GetDirectoryName(relative) ?? "");
                     if (options.OptimizeInPlace)
                     {
@@ -563,6 +567,7 @@ public static class ReaKiller
         string outputFormat = "png";
         bool optimizeInPlace = false;
         bool adaptiveWorkers = false;
+        int batchSize = 0, indexOffset = 0;
         string[] includeExtensions = [];
         string[] excludeExtensions = [];
         string namePattern = "{name}_{ext}";
@@ -597,6 +602,8 @@ public static class ReaKiller
                 case "--format": outputFormat = Value().ToLowerInvariant(); break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--adaptive-workers": adaptiveWorkers = true; break;
+                case "--batch-size": batchSize = ParsePositive(Value(), flag); break;
+                case "--index-offset": indexOffset = int.Parse(Value(), CultureInfo.InvariantCulture); break;
                 case "--include-ext": includeExtensions = ParseExtensions(Value()); break;
                 case "--exclude-ext": excludeExtensions = ParseExtensions(Value()); break;
                 case "--auto-contrast": autoContrast = true; break;
@@ -637,7 +644,7 @@ public static class ReaKiller
         if (optimizeInPlace && (maxWidth is not null || maxHeight is not null || contrast != 0 || sharpen != 0 || autoContrast)) throw new ArgumentException("Optimization mode cannot resize or enhance images.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers, includeExtensions, excludeExtensions);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers, includeExtensions, excludeExtensions, batchSize, indexOffset);
     }
 
     private static void ValidateNamePattern(string pattern)
