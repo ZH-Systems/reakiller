@@ -16,7 +16,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers, string[] IncludeExtensions, string[] ExcludeExtensions);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -81,6 +81,15 @@ public static class ReaKiller
             Console.Error.WriteLine("Unsupported extension: " + Path.GetExtension(options.Source));
             return 2;
         }
+
+        // Filter before name collision checks or decoding; explicit file selections are filtered too.
+        inputFiles = inputFiles.Where(path =>
+        {
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            return (options.IncludeExtensions.Length == 0 || options.IncludeExtensions.Contains(extension))
+                && !options.ExcludeExtensions.Contains(extension);
+        }).ToArray();
+        Console.WriteLine($"Extension filter: {inputFiles.Length} file(s) selected.");
 
         // Resolve names before conversion so jobs cannot overwrite each other's outputs.
         var outputNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -554,6 +563,8 @@ public static class ReaKiller
         string outputFormat = "png";
         bool optimizeInPlace = false;
         bool adaptiveWorkers = false;
+        string[] includeExtensions = [];
+        string[] excludeExtensions = [];
         string namePattern = "{name}_{ext}";
         string? stopFile = null;
         string? filesFrom = null;
@@ -586,6 +597,8 @@ public static class ReaKiller
                 case "--format": outputFormat = Value().ToLowerInvariant(); break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
                 case "--adaptive-workers": adaptiveWorkers = true; break;
+                case "--include-ext": includeExtensions = ParseExtensions(Value()); break;
+                case "--exclude-ext": excludeExtensions = ParseExtensions(Value()); break;
                 case "--auto-contrast": autoContrast = true; break;
                 case "--name-pattern": namePattern = Value(); break;
                 case "--stop-file": stopFile = Value(); break;
@@ -624,7 +637,7 @@ public static class ReaKiller
         if (optimizeInPlace && (maxWidth is not null || maxHeight is not null || contrast != 0 || sharpen != 0 || autoContrast)) throw new ArgumentException("Optimization mode cannot resize or enhance images.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers, includeExtensions, excludeExtensions);
     }
 
     private static void ValidateNamePattern(string pattern)
@@ -664,6 +677,15 @@ public static class ReaKiller
         return output;
     }
 
+    private static string[] ParseExtensions(string value)
+    {
+        var extensions = value.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(e => "." + e.TrimStart('.').ToLowerInvariant()).Distinct().ToArray();
+        if (extensions.Length == 0 || extensions.Any(e => !Supported.Contains(e)))
+            throw new ArgumentException("Extension filters must contain supported extensions (for example bmp,tif,dic).");
+        return extensions;
+    }
+
     private static int ParsePositive(string value, string name)
     {
         if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var result)
@@ -678,7 +700,7 @@ public static class ReaKiller
             ReaKiller: IMG, DICOM, JPEG, TIFF to PNG.
             Usage:
               ReaKiller.exe convert <file-or-directory> --output <directory> [options]
-            Options:
+            Options:\n              --include-ext bmp,tif   Only convert these source extensions\n              --exclude-ext jpg,png   Skip these source extensions
               --format png|jpg        Output format (default png)\n              --optimize-in-place     Conservative same-format optimization (PNG only)\n              --in-place              Write converted image beside source, then delete converted source
               --recursive, -r         Traverse subdirectories
               --threads <n>          Maximum concurrent conversion workers
