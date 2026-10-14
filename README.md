@@ -112,3 +112,15 @@ To Authenticode-sign the actual executables, obtain a publicly trusted code-sign
 On pushes to `main`, the workflow signs `ReaKiller.exe` and `ReaKiller.Desktop.exe`, timestamps the signatures, verifies them using Windows SignTool, and uploads the bundle. If the secrets are missing, the build is **unsigned**. PR builds remain unsigned. Modern CA-issued code-signing private keys may need hardware-backed custody or hosted signing rather than an exportable PFX; in that case, this workflow must be adapted to the certificate provider's signing service.
 
 Confirm with Windows file Properties → Digital Signatures, or `Get-AuthenticodeSignature .\\ReaKiller.Desktop.exe`. A matching Company field alone does not suppress SmartScreen warnings. Code has been committed but the signed CI output has not been validated.
+
+## Source selection: folder or individual files
+
+Use the **Select individual files instead of a folder** toggle in the desktop UI. In individual-file mode, **Browse...** opens a multi-select file picker for IMG, DCM, DICOM, JPG, JPEG, TIF, and TIFF files. Dragging multiple images onto the window also works in this mode. Only those selected files are converted, and the preview uses the first selected image. Turning the toggle off restores whole-folder processing and the recursive scan control.
+
+For automation, the CLI accepts a UTF-8 text file containing one absolute image path per line:
+
+```cmd
+ReaKiller.exe convert "D:\Images\first.img" --files-from "D:\Images\selection.txt" --output "D:\Converted" --name-pattern "{index}_{name}"
+```
+
+With selected files, non-in-place outputs go directly into the chosen output directory rather than inheriting each file's original directory. Duplicate resolved names are rejected before processing. In-place conversion creates PNGs beside their respective originals and preserves the current source-preservation rules.
