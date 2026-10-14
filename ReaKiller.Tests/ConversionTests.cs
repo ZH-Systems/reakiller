@@ -17,6 +17,28 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task BatchOfBmpImagesCrossesResourceCheckpoint()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "source");
+            var output = Path.Combine(root, "output");
+            Directory.CreateDirectory(source);
+            using (var bmp = new MagickImage(MagickColors.White, 8, 8))
+            {
+                for (var i = 0; i < 255; i++)
+                    bmp.Write(Path.Combine(source, $"image_{i:D4}.bmp"), MagickFormat.Bmp);
+            }
+            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output,
+                "--threads", "2"]);
+            Assert.Equal(0, exit);
+            Assert.Equal(255, Directory.GetFiles(output, "*.png").Length);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task FilenameWithSpaceBeforeExtensionIsNormalized()
     {
         var root = NewFolder();
