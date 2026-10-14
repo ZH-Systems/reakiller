@@ -167,10 +167,24 @@ public partial class MainWindow : Window
         catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to open report"); }
     }
 
+    private void OutputFormat_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (NamePreview is not null) NamePattern_Changed(sender, null!);
+    }
+
+    private void OptimizeInPlace_Changed(object sender, RoutedEventArgs e)
+    {
+        if (OptimizeInPlace is null || InPlace is null || OutputPath is null || BrowseOutput is null) return;
+        if (OptimizeInPlace.IsChecked == true) InPlace.IsChecked = false;
+        OutputPath.IsEnabled = OptimizeInPlace.IsChecked != true && InPlace.IsChecked != true;
+        BrowseOutput.IsEnabled = OutputPath.IsEnabled;
+        if (OutputFormat is not null) OutputFormat.IsEnabled = OptimizeInPlace.IsChecked != true;
+    }
+
     private void InPlace_Changed(object sender, RoutedEventArgs e)
     {
         if (OutputPath is null || BrowseOutput is null || InPlace is null) return;
-        var enable = InPlace.IsChecked != true;
+        var enable = InPlace.IsChecked != true && OptimizeInPlace?.IsChecked != true;
         OutputPath.IsEnabled = enable;
         BrowseOutput.IsEnabled = enable;
     }
@@ -249,9 +263,10 @@ public partial class MainWindow : Window
         }
         var sourceWasFile = File.Exists(source);
         var sourceDirectory = sourceWasFile ? Path.GetDirectoryName(Path.GetFullPath(source))! : Path.GetFullPath(source);
+        var optimize = OptimizeInPlace.IsChecked == true;
         var inPlace = InPlace.IsChecked == true;
         var destination = OutputPath.Text.Trim().Trim('"');
-        if (!inPlace && string.IsNullOrWhiteSpace(destination))
+        if (!inPlace && !optimize && string.IsNullOrWhiteSpace(destination))
         {
             MessageBox.Show("Choose an output folder.", "Output required");
             return;
@@ -270,7 +285,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (inPlace && MessageBox.Show(
+        if ((inPlace || optimize) && MessageBox.Show(
                 "In-place mode removes each source file after conversion. Back up the folder first. Continue?",
                 "Confirm in-place replacement", MessageBoxButton.YesNo, MessageBoxImage.Warning)
             != MessageBoxResult.Yes) return;
@@ -304,7 +319,10 @@ public partial class MainWindow : Window
         }
         start.ArgumentList.Add("--stop-file");
         start.ArgumentList.Add(_stopMarker);
-        if (inPlace) start.ArgumentList.Add("--in-place");
+        start.ArgumentList.Add("--format");
+        start.ArgumentList.Add(((ComboBoxItem)OutputFormat.SelectedItem).Tag.ToString()!);
+        if (optimize) start.ArgumentList.Add("--optimize-in-place");
+        else if (inPlace) start.ArgumentList.Add("--in-place");
         else
         {
             start.ArgumentList.Add("--output");
@@ -320,18 +338,18 @@ public partial class MainWindow : Window
         start.ArgumentList.Add(pattern);
         start.ArgumentList.Add("--compression-effort");
         start.ArgumentList.Add(((int)EffortSlider.Value).ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
-        if (ContrastSlider.Value != 0)
+        if (!optimize && AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
+        if (!optimize && ContrastSlider.Value != 0)
         {
             start.ArgumentList.Add("--contrast");
             start.ArgumentList.Add(((int)ContrastSlider.Value).ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (SharpenSlider.Value > 0)
+        if (!optimize && SharpenSlider.Value > 0)
         {
             start.ArgumentList.Add("--sharpen");
             start.ArgumentList.Add(SharpenSlider.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text))
+        if (!optimize && !string.IsNullOrWhiteSpace(MaxWidthInput.Text))
         {
             start.ArgumentList.Add("--max-width");
             start.ArgumentList.Add(MaxWidthInput.Text.Trim());
@@ -348,6 +366,8 @@ public partial class MainWindow : Window
             OutputPath.IsEnabled = false;
             BrowseOutput.IsEnabled = false;
             InPlace.IsEnabled = false;
+            OptimizeInPlace.IsEnabled = false;
+            OutputFormat.IsEnabled = false;
             Recursive.IsEnabled = false;
             Overwrite.IsEnabled = false;
             Compression.IsEnabled = false;
@@ -372,7 +392,7 @@ public partial class MainWindow : Window
             await Task.WhenAll(standard, errors);
             ProgressText.Text = _cancelRequested ? "Cancelled" : _process.ExitCode == 0 ? "Complete" : $"Exited with code {_process.ExitCode}";
             if (_cancelRequested) SummaryText.Text = "Cancelled. Review source and output files before rerunning.";
-            _lastReport = Path.Combine(inPlace ? sourceDirectory : Path.GetFullPath(destination), "reakiller-report.csv");
+            _lastReport = Path.Combine(inPlace || optimize ? sourceDirectory : Path.GetFullPath(destination), "reakiller-report.csv");
             OpenReportButton.IsEnabled = File.Exists(_lastReport);
             if (_process.ExitCode == 0 && !_cancelRequested) Progress.Value = 100;
         }
@@ -400,9 +420,11 @@ public partial class MainWindow : Window
             ScanButton.IsEnabled = true;
             SourcePath.IsEnabled = true;
             SingleFileMode.IsEnabled = true;
-            OutputPath.IsEnabled = InPlace.IsChecked != true;
-            BrowseOutput.IsEnabled = InPlace.IsChecked != true;
+            OutputPath.IsEnabled = InPlace.IsChecked != true && OptimizeInPlace.IsChecked != true;
+            BrowseOutput.IsEnabled = InPlace.IsChecked != true && OptimizeInPlace.IsChecked != true;
             InPlace.IsEnabled = true;
+            OptimizeInPlace.IsEnabled = true;
+            OutputFormat.IsEnabled = OptimizeInPlace.IsChecked != true;
             Recursive.IsEnabled = SingleFileMode.IsChecked != true;
             Overwrite.IsEnabled = true;
             Compression.IsEnabled = true;
