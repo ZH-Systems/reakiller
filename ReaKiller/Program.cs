@@ -16,7 +16,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -57,7 +57,11 @@ public static class ReaKiller
             return 2;
         }
 
-        var inputFiles = sourceIsFile
+        var inputFiles = options.FilesFrom is not null
+            ? File.ReadAllLines(options.FilesFrom).Where(line => !string.IsNullOrWhiteSpace(line))
+                .Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray()
+            : sourceIsFile
             ? new[] { Path.GetFullPath(options.Source) }
             : Directory.EnumerateFiles(
                 sourceRoot, "*",
@@ -66,7 +70,13 @@ public static class ReaKiller
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-        if (sourceIsFile && !Supported.Contains(Path.GetExtension(options.Source)))
+        if (options.FilesFrom is not null && (inputFiles.Length == 0 || inputFiles.Any(path => !File.Exists(path) || !Supported.Contains(Path.GetExtension(path)))))
+        {
+            Console.Error.WriteLine("File selection contains missing or unsupported images.");
+            return 2;
+        }
+
+        if (options.FilesFrom is null && sourceIsFile && !Supported.Contains(Path.GetExtension(options.Source)))
         {
             Console.Error.WriteLine("Unsupported extension: " + Path.GetExtension(options.Source));
             return 2;
@@ -85,8 +95,9 @@ public static class ReaKiller
                 Console.Error.WriteLine("Naming error for " + file + ": " + ex.Message);
                 return 2;
             }
-            var relativeFolder = Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
-            var targetFolder = Path.GetFullPath(Path.Combine(destination, relativeFolder));
+            var relativeFolder = options.FilesFrom is not null ? "" : Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, file)) ?? "";
+            var targetFolder = options.InPlace && options.FilesFrom is not null
+                ? Path.GetDirectoryName(file)! : Path.GetFullPath(Path.Combine(destination, relativeFolder));
             var target = Path.Combine(targetFolder, stem + ".png");
             if (assignedNames.TryGetValue(target, out var other))
             {
@@ -118,8 +129,10 @@ public static class ReaKiller
                         return ValueTask.CompletedTask;
                     }
                     var relative = Path.GetRelativePath(sourceRoot, file);
-                    var destinationSubfolder = Path.Combine(destination,
-                        Path.GetDirectoryName(relative) ?? "");
+                    var destinationSubfolder = options.InPlace && options.FilesFrom is not null
+                        ? Path.GetDirectoryName(file)!
+                        : options.FilesFrom is not null ? destination
+                        : Path.Combine(destination, Path.GetDirectoryName(relative) ?? "");
                     // Include the original extension to avoid collisions such as image.jpg and image.tif.
                     var stem = Path.GetFileNameWithoutExtension(file);
                     var extensionTag = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
@@ -446,6 +459,7 @@ public static class ReaKiller
         string compressionMode = "lossless";
         string namePattern = "{name}_{ext}";
         string? stopFile = null;
+        string? filesFrom = null;
         int? compressionEffort = null;
         int contrast = 0;
         double sharpen = 0;
@@ -475,6 +489,7 @@ public static class ReaKiller
                 case "--auto-contrast": autoContrast = true; break;
                 case "--name-pattern": namePattern = Value(); break;
                 case "--stop-file": stopFile = Value(); break;
+                case "--files-from": filesFrom = Value(); break;
                 case "--compression-effort":
                     if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var effort) || effort < 0 || effort > 100)
                         throw new ArgumentException("--compression-effort must be 0 to 100.");
@@ -506,7 +521,7 @@ public static class ReaKiller
             throw new ArgumentException("--in-place and --output are mutually exclusive.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom);
     }
 
     private static void ValidateNamePattern(string pattern)
@@ -569,6 +584,7 @@ public static class ReaKiller
               --sharpen <0..2>       Optional unsharp-mask strength, 0 is off
               --auto-contrast        Stretch tonal range automatically
               --name-pattern <text>  Tokens: {name}, {ext}, {index}, {date}; extension .png is automatic
+              --files-from <path>    Read explicitly selected image paths, one per line
               --stop-file <path>     Stop after current file when this marker exists
               --overwrite           Replace existing output files
               --dry-run             Preview input/output paths
