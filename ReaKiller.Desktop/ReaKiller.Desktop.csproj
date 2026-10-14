@@ -5,6 +5,11 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
+    <Company>ZH-Systems</Company>
+    <Authors>ZH-Systems</Authors>
+    <Product>ReaKiller</Product>
+    <Copyright>Copyright (c) ZH-Systems</Copyright>
+    <Version>1.0.0</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ReaKiller.Desktop</AssemblyName>
   </PropertyGroup>
