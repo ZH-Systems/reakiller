@@ -632,6 +632,9 @@ public static class ReaKiller
                 "date" => date,
                 _ => throw new InvalidOperationException("Invalid token")
             }, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Legacy imaging exports can contain spaces before the extension.
+        // Normalize the generated stem without modifying the source file.
+        output = output.TrimEnd(' ', '.');
         if (string.IsNullOrWhiteSpace(output) || output is "." or ".." ||
             output.EndsWith('.') || output.EndsWith(' ') ||
             output.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
