@@ -11,12 +11,12 @@ public static class ReaKiller
 {
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".png", ".tif", ".tiff"
+        ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
     };
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -111,14 +111,16 @@ public static class ReaKiller
         if (!options.DryRun) Directory.CreateDirectory(destination);
         Console.WriteLine($"ReaKiller: {inputFiles.Length} input file(s), {options.Threads} worker(s).");
         if (options.InPlace) Console.WriteLine("IN-PLACE MODE: originals will be deleted ONLY after successful PNG conversion and verification.");
+        using var limiter = options.AdaptiveWorkers ? new AdaptiveWorkerLimiter(options.Threads) : null;
         var results = new ConcurrentBag<Result>();
         var total = 0;
         var progressLock = new object();
 
         await Parallel.ForEachAsync(inputFiles,
             new ParallelOptions { MaxDegreeOfParallelism = options.Threads },
-            (file, _) =>
+            async (file, cancellationToken) =>
             {
+                using var permit = limiter is null ? null : await limiter.EnterAsync(cancellationToken);
                 var fileResults = new List<Result>();
                 void Record(Result result) { results.Add(result); fileResults.Add(result); }
                 try
@@ -126,7 +128,7 @@ public static class ReaKiller
                     if (options.StopFile is not null && File.Exists(options.StopFile))
                     {
                         Record(new Result(file, "", "STOPPED", "Stopped by user."));
-                        return ValueTask.CompletedTask;
+                        return;
                     }
                     var relative = Path.GetRelativePath(sourceRoot, file);
                     var destinationSubfolder = (options.InPlace || options.OptimizeInPlace) && options.FilesFrom is not null
@@ -158,7 +160,7 @@ public static class ReaKiller
 
                     Directory.CreateDirectory(destinationSubfolder);
                     var readSettings = new MagickReadSettings();
-                    if (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase))
+                    if (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase))
                     {
                         var signature = ReadSignature(file);
                         if (signature == "JPEG")
@@ -167,6 +169,10 @@ public static class ReaKiller
                             readSettings.Format = MagickFormat.Tiff;
                         else if (signature == "DICOM")
                             readSettings.Format = MagickFormat.Dcm;
+                        else if (signature == "PNG")
+                            readSettings.Format = MagickFormat.Png;
+                        else if (signature == "BMP")
+                            readSettings.Format = MagickFormat.Bmp;
                         else
                             throw new NotSupportedException(
                                 "Unrecognized .IMG signature. This file is not a JPEG/TIFF/DICOM variant supported by the initial decoder.");
@@ -175,6 +181,7 @@ public static class ReaKiller
                     if (Path.GetExtension(file).Equals(".dcm", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file).Equals(".dicom", StringComparison.OrdinalIgnoreCase)
                         || (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase)
+                            && ReadSignature(file) == "DICOM") || (Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase)
                             && ReadSignature(file) == "DICOM"))
                     {
                         // Confirm this is a valid DICOM dataset before attempting PNG rendering.
@@ -519,6 +526,7 @@ public static class ReaKiller
         string compressionMode = "lossless";
         string outputFormat = "png";
         bool optimizeInPlace = false;
+        bool adaptiveWorkers = false;
         string namePattern = "{name}_{ext}";
         string? stopFile = null;
         string? filesFrom = null;
@@ -550,6 +558,7 @@ public static class ReaKiller
                 case "--optimize-in-place": optimizeInPlace = true; break;
                 case "--format": outputFormat = Value().ToLowerInvariant(); break;
                 case "--threads": threads = ParsePositive(Value(), flag); break;
+                case "--adaptive-workers": adaptiveWorkers = true; break;
                 case "--auto-contrast": autoContrast = true; break;
                 case "--name-pattern": namePattern = Value(); break;
                 case "--stop-file": stopFile = Value(); break;
@@ -588,7 +597,7 @@ public static class ReaKiller
         if (optimizeInPlace && (maxWidth is not null || maxHeight is not null || contrast != 0 || sharpen != 0 || autoContrast)) throw new ArgumentException("Optimization mode cannot resize or enhance images.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers);
     }
 
     private static void ValidateNamePattern(string pattern)
@@ -642,7 +651,8 @@ public static class ReaKiller
             Options:
               --format png|jpg        Output format (default png)\n              --optimize-in-place     Conservative same-format optimization (PNG only)\n              --in-place              Write converted image beside source, then delete converted source
               --recursive, -r         Traverse subdirectories
-              --threads <n>          Parallel workers (default up to 4)
+              --threads <n>          Maximum concurrent conversion workers
+              --adaptive-workers     Adjust worker admissions using CPU and memory pressure
               --max-width <pixels>   Optional maximum output width
               --max-height <pixels>  Optional maximum output height
               --compression <mode>   lossless|max (presets, overridden by effort)
