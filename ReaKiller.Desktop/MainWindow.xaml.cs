@@ -343,6 +343,8 @@ public partial class MainWindow : Window
         if (Recursive.IsChecked == true) start.ArgumentList.Add("--recursive");
         if (Overwrite.IsChecked == true) start.ArgumentList.Add("--overwrite");
         if (AdaptiveWorkers.IsChecked == true) start.ArgumentList.Add("--adaptive-workers");
+        start.ArgumentList.Add("--batch-size");
+        start.ArgumentList.Add("500");
         start.ArgumentList.Add("--threads");
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
