@@ -3,11 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="AkituBlue" Color="#1673D5"/>
+        <SolidColorBrush x:Key="AkituBlue" Color="#2763C4"/>
         <SolidColorBrush x:Key="DeepBlue" Color="#103968"/>
         <SolidColorBrush x:Key="Canvas" Color="#F3F7FC"/>
         <Style TargetType="Button">
-            <Setter Property="Padding" Value="15,9"/>
+            <Setter Property="Padding" Value="13,8"/>
             <Setter Property="Background" Value="{StaticResource AkituBlue}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -16,17 +16,30 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="8"
+                        <Border Background="{TemplateBinding Background}" CornerRadius="5"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Opacity" Value="1"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource TemplatedParent}}" Value="False">
+                                            <Setter Property="Opacity" Value="0.45"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
+                                            <Setter Property="Opacity" Value="0.87"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Padding" Value="10,9"/>
-            <Setter Property="BorderBrush" Value="#C9D8E8"/>
+            <Setter Property="Padding" Value="9,7"/>
+            <Setter Property="BorderBrush" Value="#C9D1DB"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
