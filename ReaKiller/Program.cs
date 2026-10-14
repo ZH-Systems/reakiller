@@ -145,7 +145,7 @@ public static class ReaKiller
                         {
                             Record(new Result(file, "", "FAILED", ex.Message));
                         }
-                        return ValueTask.CompletedTask;
+                        return;
                     }
                     // Include the original extension to avoid collisions such as image.jpg and image.tif.
                     var stem = Path.GetFileNameWithoutExtension(file);
@@ -155,7 +155,7 @@ public static class ReaKiller
                     {
                         Record(new Result(file, Path.Combine(destinationSubfolder,
                             outputStem + (options.OutputFormat == "jpg" ? ".jpg" : ".png")), "DRY_RUN", ""));
-                        return ValueTask.CompletedTask;
+                        return;
                     }
 
                     Directory.CreateDirectory(destinationSubfolder);
@@ -349,7 +349,7 @@ public static class ReaKiller
                         DrawProgress(done, inputFiles.Length);
                     }
                 }
-                return ValueTask.CompletedTask;
+                return;
             });
 
         var ordered = results.OrderBy(r => r.Source, StringComparer.OrdinalIgnoreCase)
@@ -510,6 +510,8 @@ public static class ReaKiller
             ((buffer[0] == 0x49 && buffer[1] == 0x49 && buffer[2] == 0x2A && buffer[3] == 0x00) ||
              (buffer[0] == 0x4D && buffer[1] == 0x4D && buffer[2] == 0x00 && buffer[3] == 0x2A)))
             return "TIFF";
+        if (count >= 8 && buffer[0] == 137 && buffer[1] == 80 && buffer[2] == 78 && buffer[3] == 71) return "PNG";
+        if (count >= 2 && buffer[0] == 0x42 && buffer[1] == 0x4D) return "BMP";
         if (count >= 132 && buffer[128] == (byte)'D' && buffer[129] == (byte)'I'
             && buffer[130] == (byte)'C' && buffer[131] == (byte)'M')
             return "DICOM";
