@@ -159,3 +159,11 @@ A separate **Optimize PNG in place (same dimensions)** option attempts to recomp
 
 Source filesystem timestamps are restored after successful replacement. File-level metadata (for example extended attributes, security ACLs, application-specific chunks or profiles) and byte-for-byte pixel equivalence are not yet covered by a dedicated optimization regression test; test on copies before using on sensitive records. Optimization may not reduce already optimized PNGs. The original remains untouched when the new file is not smaller.
 
+
+## Adaptive conversion concurrency
+
+The image conversion CLI accepts `--adaptive-workers` and the desktop UI has an **Automatically adjust workers for system load** checkbox (selected by default). `--threads N` remains the absolute upper bound, and individual files are admitted according to a dynamic worker limit. The limiter samples ReaKiller **process-level CPU** (normalized by logical processor count) and .NET GC-reported memory pressure approximately every two seconds as workers request permits. It reduces allowed concurrency above 88% process CPU or under elevated GC memory pressure, increases it below 65% process CPU and otherwise holds steady. The implementation does not sample disk latency, actual available physical RAM directly, or total machine-wide CPU use; it should be tuned against migration workloads before being relied on for SQL Server/IIS resource protection. Existing conversions finish naturally when the limit falls.
+
+## Carestream Dental image formats
+
+Carestream CS Imaging's documented portable exports include DICOM, JPEG, TIFF, PNG and BMP. Legacy Carestream orthodontic documentation also names `.cmp` as an imaging format and `.pcx` as an import format. The converter now accepts `.bmp`, `.pcx`, and `.cmp` in addition to its original formats. A `.cmp` input is **not** assumed decodable: the converter checks for embedded standard JPEG, TIFF, PNG, BMP or DICOM signatures and decodes only recognized underlying formats. Proprietary CMP content remains unsupported unless an actual sample and its specification establish a suitable decoder. For clinical image migrations, exporting DICOM or TIFF through Carestream software is preferable to guessing at proprietary bytes; verify image appearance and metadata.
