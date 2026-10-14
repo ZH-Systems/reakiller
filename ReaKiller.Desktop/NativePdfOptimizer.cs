@@ -1,3 +1,4 @@
+using System.IO;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
@@ -31,8 +32,8 @@ internal static class NativePdfOptimizer
             document.Save(temporaryOutput);
         }
         cancellationToken.ThrowIfCancellationRequested();
-        using var verified = PdfReader.Open(temporaryOutput, PdfDocumentOpenMode.ReadOnly);
-        using var original = PdfReader.Open(source, PdfDocumentOpenMode.ReadOnly);
+        using var verified = PdfReader.Open(temporaryOutput, PdfDocumentOpenMode.Import);
+        using var original = PdfReader.Open(source, PdfDocumentOpenMode.Import);
         if (verified.PageCount != original.PageCount)
             throw new InvalidDataException("Page count changed during optimization.");
         return (originalBytes, new FileInfo(temporaryOutput).Length, verified.PageCount);
