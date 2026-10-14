@@ -411,6 +411,77 @@ public static class ReaKiller
         return stopped > 0 ? 3 : failed > 0 ? 1 : 0;
     }
 
+    private static async Task<int> RunIsolatedBatches(string[] args, Options options, string[] files)
+    {
+        var exe = Environment.ProcessPath ?? throw new IOException("ReaKiller executable not found.");
+        var argv = args.Skip(args[0].Equals("convert", StringComparison.OrdinalIgnoreCase) ? 2 : 1).ToList();
+        foreach (var flag in new[] { "--files-from", "--batch-size", "--index-offset" })
+        {
+            var n = argv.FindIndex(x => x.Equals(flag, StringComparison.OrdinalIgnoreCase));
+            if (n >= 0) argv.RemoveRange(n, 2);
+        }
+        var sourceRoot = File.Exists(options.Source)
+            ? Path.GetDirectoryName(Path.GetFullPath(options.Source))!
+            : Path.GetFullPath(options.Source);
+        var report = Path.Combine(options.InPlace || options.OptimizeInPlace ? sourceRoot : Path.GetFullPath(options.Destination),
+            "reakiller-report.csv");
+        var rows = new List<string> { "Source,Output,Status,Detail" };
+        var failed = false;
+        for (var start = 0; start < files.Length; start += options.BatchSize)
+        {
+            if (options.StopFile is not null && File.Exists(options.StopFile)) return 3;
+            var list = Path.Combine(Path.GetTempPath(), "reakiller-batch-" + Guid.NewGuid().ToString("N") + ".txt");
+            var count = Math.Min(options.BatchSize, files.Length - start);
+            try
+            {
+                await File.WriteAllLinesAsync(list, files.Skip(start).Take(count));
+                using var child = new Process();
+                child.StartInfo = new ProcessStartInfo(exe)
+                {
+                    UseShellExecute = false, CreateNoWindow = true,
+                    RedirectStandardOutput = true, RedirectStandardError = true
+                };
+                child.StartInfo.ArgumentList.Add("convert");
+                child.StartInfo.ArgumentList.Add(options.Source);
+                foreach (var arg in argv) child.StartInfo.ArgumentList.Add(arg);
+                child.StartInfo.ArgumentList.Add("--files-from");
+                child.StartInfo.ArgumentList.Add(list);
+                child.StartInfo.ArgumentList.Add("--index-offset");
+                child.StartInfo.ArgumentList.Add(start.ToString(CultureInfo.InvariantCulture));
+                Console.WriteLine($"Starting isolated batch {start / options.BatchSize + 1} ({count} files).");
+                child.Start();
+                var stdout = Task.Run(async () =>
+                {
+                    string? line;
+                    while ((line = await child.StandardOutput.ReadLineAsync()) is not null)
+                        Console.WriteLine(line);
+                });
+                var stderr = Task.Run(async () =>
+                {
+                    string? line;
+                    while ((line = await child.StandardError.ReadLineAsync()) is not null)
+                        Console.Error.WriteLine(line);
+                });
+                await child.WaitForExitAsync();
+                await Task.WhenAll(stdout, stderr);
+                if (File.Exists(report))
+                {
+                    var part = await File.ReadAllLinesAsync(report);
+                    rows.AddRange(part.Skip(1));
+                }
+                if (child.ExitCode != 0)
+                {
+                    failed = true;
+                    Console.Error.WriteLine($"Batch starting at file {start + 1} failed with exit code {child.ExitCode}.");
+                    if (child.ExitCode == 3) return 3;
+                }
+            }
+            finally { try { File.Delete(list); } catch (IOException) { } }
+        }
+        if (rows.Count > 1) await File.WriteAllLinesAsync(report, rows, Encoding.UTF8);
+        return failed ? 1 : 0;
+    }
+
     private static void OptimizeOriginalFile(string file, Options options, Action<Result> record)
     {
         var ext = Path.GetExtension(file).ToLowerInvariant();
