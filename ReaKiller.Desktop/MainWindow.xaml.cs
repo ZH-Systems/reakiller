@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private bool _cancelRequested;
     private string? _stopMarker;
     private string? _lastReport;
+    private string? _selectionListFile;
+    private readonly List<string> _selectedFiles = new();
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
     { ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".tif", ".tiff" };
 
@@ -48,8 +50,35 @@ public partial class MainWindow : Window
 
     private void BrowseSource_Click(object sender, RoutedEventArgs e)
     {
+        if (SingleFileMode.IsChecked == true)
+        {
+            var picker = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select images to convert",
+                Multiselect = true,
+                Filter = "Supported images|*.img;*.dcm;*.dicom;*.jpg;*.jpeg;*.tif;*.tiff|All files|*.*"
+            };
+            if (picker.ShowDialog() != true) return;
+            _selectedFiles.Clear();
+            _selectedFiles.AddRange(picker.FileNames.Where(path => Extensions.Contains(Path.GetExtension(path))));
+            SourcePath.Text = _selectedFiles.Count == 1 ? _selectedFiles[0] : $"{_selectedFiles.Count} files selected";
+            FileCountText.Text = $"{_selectedFiles.Count:N0} selected image(s)";
+            return;
+        }
         var chosen = BrowseFolder();
         if (chosen is not null) SourcePath.Text = chosen;
+    }
+
+    private void SingleFileMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (SourcePath is null || Recursive is null || SelectedFilesHint is null) return;
+        _selectedFiles.Clear();
+        SourcePath.Text = "";
+        var individual = SingleFileMode.IsChecked == true;
+        SourcePath.IsReadOnly = individual;
+        Recursive.IsEnabled = !individual;
+        SelectedFilesHint.Visibility = individual ? Visibility.Visible : Visibility.Collapsed;
+        if (FileCountText is not null) FileCountText.Text = individual ? "No files selected" : "No source selected";
     }
 
     private void BrowseOutput_Click(object sender, RoutedEventArgs e)
@@ -98,6 +127,11 @@ public partial class MainWindow : Window
     private async void Scan_Click(object sender, RoutedEventArgs e)
     {
         var source = SourcePath.Text.Trim().Trim('"');
+        if (SingleFileMode.IsChecked == true)
+        {
+            FileCountText.Text = $"{_selectedFiles.Count:N0} selected image(s)";
+            return;
+        }
         if (!File.Exists(source) && !Directory.Exists(source))
         {
             MessageBox.Show("Select an existing image or folder first.", "Source required");
@@ -194,7 +228,13 @@ public partial class MainWindow : Window
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (_running) return;
-        var source = SourcePath.Text.Trim().Trim('"');
+        var source = SingleFileMode.IsChecked == true ? _selectedFiles.FirstOrDefault() ?? "" : SourcePath.Text.Trim().Trim('"');
+        if (SingleFileMode.IsChecked == true && (_selectedFiles.Count == 0 ||
+            _selectedFiles.Any(path => !File.Exists(path) || !Extensions.Contains(Path.GetExtension(path)))))
+        {
+            MessageBox.Show("Select one or more existing supported images.", "Invalid selection");
+            return;
+        }
         if (!File.Exists(source) && !Directory.Exists(source))
         {
             MessageBox.Show("Choose an existing source file or directory.", "Invalid source");
@@ -255,6 +295,13 @@ public partial class MainWindow : Window
         };
         start.ArgumentList.Add("convert");
         start.ArgumentList.Add(source);
+        if (SingleFileMode.IsChecked == true)
+        {
+            _selectionListFile = Path.Combine(Path.GetTempPath(), "reakiller-files-" + Guid.NewGuid().ToString("N") + ".txt");
+            File.WriteAllLines(_selectionListFile, _selectedFiles);
+            start.ArgumentList.Add("--files-from");
+            start.ArgumentList.Add(_selectionListFile);
+        }
         start.ArgumentList.Add("--stop-file");
         start.ArgumentList.Add(_stopMarker);
         if (inPlace) start.ArgumentList.Add("--in-place");
@@ -297,6 +344,7 @@ public partial class MainWindow : Window
             StartButton.IsEnabled = false;
             ScanButton.IsEnabled = false;
             SourcePath.IsEnabled = false;
+            SingleFileMode.IsEnabled = false;
             OutputPath.IsEnabled = false;
             BrowseOutput.IsEnabled = false;
             InPlace.IsEnabled = false;
@@ -337,6 +385,11 @@ public partial class MainWindow : Window
         {
             _process?.Dispose();
             _process = null;
+            if (_selectionListFile is not null)
+            {
+                try { File.Delete(_selectionListFile); } catch (IOException) { }
+                _selectionListFile = null;
+            }
             if (_stopMarker is not null)
             {
                 try { File.Delete(_stopMarker); } catch (IOException) { }
@@ -346,10 +399,11 @@ public partial class MainWindow : Window
             StartButton.IsEnabled = true;
             ScanButton.IsEnabled = true;
             SourcePath.IsEnabled = true;
+            SingleFileMode.IsEnabled = true;
             OutputPath.IsEnabled = InPlace.IsChecked != true;
             BrowseOutput.IsEnabled = InPlace.IsChecked != true;
             InPlace.IsEnabled = true;
-            Recursive.IsEnabled = true;
+            Recursive.IsEnabled = SingleFileMode.IsChecked != true;
             Overwrite.IsEnabled = true;
             Compression.IsEnabled = true;
             Threads.IsEnabled = true;
