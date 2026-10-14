@@ -11,7 +11,7 @@ public static class ReaKiller
 {
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".img", ".dcm", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
+        ".img", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
     };
 
     private sealed record Options(
@@ -178,7 +178,11 @@ public static class ReaKiller
                                 "Unrecognized .IMG signature. This file is not a JPEG/TIFF/DICOM variant supported by the initial decoder.");
                     }
 
+                    if (Path.GetExtension(file).Equals(".dic", StringComparison.OrdinalIgnoreCase))
+                        readSettings.Format = MagickFormat.Dcm;
+
                     if (Path.GetExtension(file).Equals(".dcm", StringComparison.OrdinalIgnoreCase)
+                        || Path.GetExtension(file).Equals(".dic", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file).Equals(".dicom", StringComparison.OrdinalIgnoreCase)
                         || (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase)
                             && ReadSignature(file) == "DICOM") || (Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase)
