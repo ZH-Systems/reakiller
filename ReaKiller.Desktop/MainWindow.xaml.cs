@@ -111,7 +111,7 @@ public partial class MainWindow : Window
             || example.Contains('{') || example.Contains('}')
             || example.EndsWith('.') || example.EndsWith(' ');
         NamePreview.Text = invalid ? "Invalid naming pattern" : "Example: " + example + ".png";
-        NamePreview.Foreground = invalid ? Brushes.Firebrick : Brushes.RoyalBlue;
+        NamePreview.Foreground = invalid ? System.Windows.Media.Brushes.Firebrick : System.Windows.Media.Brushes.RoyalBlue;
     }
 
     private void SourcePath_Changed(object sender, TextChangedEventArgs e)
@@ -193,10 +193,10 @@ public partial class MainWindow : Window
                     var total = data.GetProperty("total").GetInt32();
                     var color = status switch
                     {
-                        "SUCCEEDED" => Brushes.ForestGreen,
-                        "STOPPED" => Brushes.DarkOrange,
-                        "FAILED" => Brushes.Firebrick,
-                        _ => Brushes.SlateGray
+                        "SUCCEEDED" => System.Windows.Media.Brushes.ForestGreen,
+                        "STOPPED" => System.Windows.Media.Brushes.DarkOrange,
+                        "FAILED" => System.Windows.Media.Brushes.Firebrick,
+                        _ => System.Windows.Media.Brushes.SlateGray
                     };
                     _fileResults.Add(new FileResult(Path.GetFileName(source), status == "SUCCEEDED" ? "Succeeded" : status == "FAILED" ? "Failed" : status == "STOPPED" ? "Stopped" : "Skipped", detail, color));
                     if (_fileResults.Count > 2000) _fileResults.RemoveAt(0);
@@ -215,12 +215,12 @@ public partial class MainWindow : Window
             Log.ScrollToEnd();
             var match = Regex.Match(text, @"\((\d+)/(\d+)\)");
             if (match.Success
-                && int.TryParse(match.Groups[1].Value, out int done)
-                && int.TryParse(match.Groups[2].Value, out int total)
-                && total > 0)
+                && int.TryParse(match.Groups[1].Value, out int consoleDone)
+                && int.TryParse(match.Groups[2].Value, out int consoleTotal)
+                && consoleTotal > 0)
             {
-                Progress.Value = 100.0 * done / total;
-                ProgressText.Text = $"{done:N0} / {total:N0} files";
+                Progress.Value = 100.0 * consoleDone / consoleTotal;
+                ProgressText.Text = $"{consoleDone:N0} / {consoleTotal:N0} files";
             }
         });
     }
