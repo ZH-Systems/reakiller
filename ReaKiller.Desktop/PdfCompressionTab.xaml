@@ -24,20 +24,15 @@
      </Grid>
      <TextBlock Text="Compression level" FontWeight="SemiBold" Foreground="#485465" Margin="0,22,0,7"/>
      <ComboBox x:Name="Preset" SelectedIndex="1" Padding="6">
-      <ComboBoxItem Content="High quality — minimal compression" Tag="printer"/>
-      <ComboBoxItem Content="Balanced — recommended" Tag="ebook"/>
-      <ComboBoxItem Content="Smallest files — reduced image quality" Tag="screen"/>
+      <ComboBoxItem Content="Conservative — lossless" Tag="printer"/>
+      <ComboBoxItem Content="Balanced — lossless" Tag="ebook"/>
+      <ComboBoxItem Content="Maximum — lossless" Tag="screen"/>
      </ComboBox>
-     <TextBlock Text="Scanned PDFs often shrink more than text-based PDFs. Visual quality may change." Foreground="#6C7785" FontSize="12" TextWrapping="Wrap" Margin="0,9,0,14"/>
+     <TextBlock Text="Native optimization currently compresses PDF streams without downsampling images. Reductions depend on the input." Foreground="#6C7785" FontSize="12" TextWrapping="Wrap" Margin="0,9,0,14"/>
      <CheckBox x:Name="SkipLarger" Content="Keep smaller original when compression increases file size" IsChecked="True" Margin="0,4,0,16" ToolTip="If the new PDF is not smaller, do not publish a larger copy."/>
      <Border Height="1" Background="#E4E8EE" Margin="0,4,0,18"/>
-     <TextBlock Text="Compression engine" FontWeight="SemiBold" Foreground="#485465"/>
-     <TextBlock x:Name="EngineStatus" Foreground="#6C7785" TextWrapping="Wrap" Margin="0,8,0,12" FontSize="12" Text="Checking Ghostscript installation..."/>
-     <Button Content="Check Ghostscript" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Click="CheckEngine_Click"/>
-     <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11" Foreground="#6C7785">
-      <Hyperlink NavigateUri="https://ghostscript.com/releases/gsdnld.html" RequestNavigate="GhostscriptLink_Click">Install Ghostscript for Windows</Hyperlink>
-      (external dependency; licensing applies).
-     </TextBlock>
+     <TextBlock Text="Built-in PDF optimizer" FontWeight="SemiBold" Foreground="#485465"/>
+     <TextBlock Text="PDFsharp 6.2.4 · MIT licence · No Ghostscript or separate installation required." Foreground="#6C7785" TextWrapping="Wrap" Margin="0,8,0,12" FontSize="12"/>
      <TextBlock Text="Files are written as *_compressed.pdf. Existing outputs are not overwritten." TextWrapping="Wrap" FontSize="11" Foreground="#6C7785" Margin="0,24,0,0"/>
     </StackPanel>
    </ScrollViewer>
