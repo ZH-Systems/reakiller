@@ -142,3 +142,11 @@ Get-AuthenticodeSignature "C:\ReaKiller\ReaKiller.Desktop.exe" | Format-List Sta
 ```
 
 **Limitations:** These signatures are not publicly trusted and may still show **Unknown Publisher** or SmartScreen warnings on unconfigured computers. Creating a self-signed certificate does not earn Windows SmartScreen reputation. The private key stays in the local user certificate store, not GitHub. No free public certificate is created. Keep the signed files together; changing an EXE afterward invalidates its signature. The GitHub Actions artifact remains unsigned unless a separate signing integration is configured.
+
+## PDF compression tab
+
+ReaKiller Desktop now includes **PDF compression** as a separate tab alongside image conversion. Select one or multiple PDF files, choose an output directory, and select a preset: **High quality** (`/printer`), **Balanced** (`/ebook`), or **Smallest files** (`/screen`). Processing is local and sequential. Results show before/after sizes; cancellation stops the active converter process and removes incomplete temporary outputs.
+
+**Prerequisite:** Install a compatible 64-bit Windows **Ghostscript** distribution from [ghostscript.com](https://ghostscript.com/releases/gsdnld.html). ReaKiller looks for `gswin64c.exe` in the Ghostscript installation directory under Program Files or in PATH. Ghostscript is **not bundled** with ReaKiller; it has AGPL/commercial licensing that should be reviewed before distributing integrated binaries. The PDF tab cannot compress files without the external executable.
+
+Existing PDFs are never deleted or modified. Output is `<original_name>_compressed.pdf` in the selected destination; if it already exists, that file is skipped. The default “Keep smaller original” preference skips publishing compressed output when it is not actually smaller. Ghostscript may alter embedded images, fonts, interactive forms, annotations, links, accessibility tags, and metadata. **Keep the source PDFs and review outputs** before using them for archival or clinical records. Password-protected, digitally signed, malformed, or restricted PDFs may fail or lose original digital signature validity when rewritten. Output verification currently checks the PDF file signature, not detailed semantic or visual equivalence.
