@@ -99,3 +99,16 @@ The converter checks the resolved names for duplicates before processing, and re
 ## Stop conversion (desktop)
 
 The desktop footer provides a red **Stop conversion** button while a batch is running. It writes a per-job temporary stop marker and asks the converter to finish or abandon in-flight image processing without starting additional output commits. Completed PNGs remain; source files that have not completed in-place conversion remain untouched. A stopped file is reported as STOPPED with exit code 3 when applicable. The same CLI also accepts `--stop-file <path>`. This is cooperative cancellation rather than immediate process termination, so an active decode may continue for some time before the batch stops. Windows build/runtime verification is still required.
+
+## Windows publisher metadata and executable signing
+
+Both Windows binaries now declare **ZH-Systems** as their Company and Authors in the .NET project metadata. This controls product/company details but is **not** a trusted Windows digital signature.
+
+To Authenticode-sign the actual executables, obtain a publicly trusted code-signing certificate issued to the applicable legal identity (with the desired ZH-Systems publisher name, subject to CA identity verification). For a PFX certificate that supports export and CI usage, configure these GitHub Actions **repository secrets**, never commit the PFX or password:
+
+- `ZH_CODESIGN_PFX_BASE64`: Base64-encoded PFX (PowerShell on Windows: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\secure\\codesign.pfx"))`).
+- `ZH_CODESIGN_PFX_PASSWORD`: Password for that PFX.
+
+On pushes to `main`, the workflow signs `ReaKiller.exe` and `ReaKiller.Desktop.exe`, timestamps the signatures, verifies them using Windows SignTool, and uploads the bundle. If the secrets are missing, the build is **unsigned**. PR builds remain unsigned. Modern CA-issued code-signing private keys may need hardware-backed custody or hosted signing rather than an exportable PFX; in that case, this workflow must be adapted to the certificate provider's signing service.
+
+Confirm with Windows file Properties → Digital Signatures, or `Get-AuthenticodeSignature .\\ReaKiller.Desktop.exe`. A matching Company field alone does not suppress SmartScreen warnings. Code has been committed but the signed CI output has not been validated.
