@@ -17,6 +17,28 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task ExtensionFiltersApplyBeforeConversion()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "source");
+            var output = Path.Combine(root, "out");
+            Directory.CreateDirectory(source);
+            WriteJpeg(Path.Combine(source, "a.bmp"));
+            WriteJpeg(Path.Combine(source, "b.jpg"));
+            WriteJpeg(Path.Combine(source, "c.tif"));
+            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output,
+                "--include-ext", ".bmp,.jpg", "--exclude-ext", "jpg"]);
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(Path.Combine(output, "a_bmp.png")));
+            Assert.False(File.Exists(Path.Combine(output, "b_jpg.png")));
+            Assert.False(File.Exists(Path.Combine(output, "c_tif.png")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task BatchOfBmpImagesCrossesResourceCheckpoint()
     {
         var root = NewFolder();
