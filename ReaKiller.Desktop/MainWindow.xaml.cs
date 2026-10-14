@@ -330,6 +330,16 @@ public partial class MainWindow : Window
             start.ArgumentList.Add("--output");
             start.ArgumentList.Add(destination);
         }
+        if (!string.IsNullOrWhiteSpace(IncludeExtensions.Text))
+        {
+            start.ArgumentList.Add("--include-ext");
+            start.ArgumentList.Add(IncludeExtensions.Text.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(ExcludeExtensions.Text))
+        {
+            start.ArgumentList.Add("--exclude-ext");
+            start.ArgumentList.Add(ExcludeExtensions.Text.Trim());
+        }
         if (Recursive.IsChecked == true) start.ArgumentList.Add("--recursive");
         if (Overwrite.IsChecked == true) start.ArgumentList.Add("--overwrite");
         if (AdaptiveWorkers.IsChecked == true) start.ArgumentList.Add("--adaptive-workers");
