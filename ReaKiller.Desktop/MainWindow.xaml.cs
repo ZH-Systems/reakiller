@@ -116,7 +116,7 @@ public partial class MainWindow : Window
 
     private void SourcePath_Changed(object sender, TextChangedEventArgs e)
     {
-        if (FileCountText is not null) FileCountText.Text = "Scan to count files";
+        if (FileCountText is not null && SingleFileMode?.IsChecked != true) FileCountText.Text = "Scan to count files";
     }
 
     private void ScanSetting_Changed(object sender, RoutedEventArgs e)
@@ -442,7 +442,17 @@ public partial class MainWindow : Window
     {
         if (_running || !e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
         if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths && paths.Length > 0)
-            SourcePath.Text = paths[0];
+        {
+            if (SingleFileMode.IsChecked == true)
+            {
+                _selectedFiles.Clear();
+                _selectedFiles.AddRange(paths.Where(path => File.Exists(path) && Extensions.Contains(Path.GetExtension(path))).Distinct(StringComparer.OrdinalIgnoreCase));
+                SourcePath.Text = _selectedFiles.Count == 1 ? _selectedFiles[0] : $"{_selectedFiles.Count} files selected";
+                FileCountText.Text = $"{_selectedFiles.Count:N0} selected image(s)";
+            }
+            else if (Directory.Exists(paths[0])) SourcePath.Text = paths[0];
+            else if (File.Exists(paths[0])) SourcePath.Text = paths[0];
+        }
     }
 
     private void SavePreset_Click(object sender, RoutedEventArgs e)
@@ -504,7 +514,7 @@ public partial class MainWindow : Window
     private async void Preview_Click(object sender, RoutedEventArgs e)
     {
         if (_running) return;
-        string source = SourcePath.Text.Trim().Trim('"');
+        string source = SingleFileMode.IsChecked == true ? _selectedFiles.FirstOrDefault() ?? "" : SourcePath.Text.Trim().Trim('"');
         if (Directory.Exists(source))
         {
             try
