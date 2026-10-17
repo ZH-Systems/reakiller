@@ -427,7 +427,7 @@ public static class ReaKiller
             "reakiller-report.csv");
         var rows = new List<string> { "Source,Output,Status,Detail" };
         // Ensure all batch outputs are distinct before starting any child.
-        var planned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var planned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < files.Length; i++)
         {
             var relative = File.Exists(options.Source) ? "" : Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, files[i])) ?? "";
@@ -435,11 +435,16 @@ public static class ReaKiller
                 Path.Combine(Path.GetFullPath(options.Destination), relative);
             var stem = ResolveName(options.NamePattern, files[i], i + 1);
             var target = Path.Combine(folder, stem + (options.OutputFormat == "jpg" ? ".jpg" : ".png"));
-            if (!planned.Add(target))
+            if (planned.TryGetValue(target, out var previous))
             {
-                Console.Error.WriteLine("Naming collision across batches: " + target);
+                Console.Error.WriteLine("Naming collision across batches:");
+                Console.Error.WriteLine("  First source:  " + previous);
+                Console.Error.WriteLine("  Second source: " + files[i]);
+                Console.Error.WriteLine("  Output:        " + target);
+                Console.Error.WriteLine("Use a unique output pattern such as {index}_{name}_{ext}; or exclude input extensions you do not need.");
                 return 2;
             }
+            planned.Add(target, files[i]);
         }
         var failed = false;
         for (var start = 0; start < files.Length; start += options.BatchSize)
