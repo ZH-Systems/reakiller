@@ -1,0 +1,23 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="ReaKiller" Manufacturer="ZH Systems" Version="1.0.0" UpgradeCode="5D7C9311-54B1-4E3E-8398-1E7637097B25" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ReaKiller is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="ReaKiller" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuDirectory" Name="ReaKiller" />
+    </StandardDirectory>
+    <Feature Id="MainFeature" Title="ReaKiller" Level="1">
+      <ComponentGroupRef Id="PublishedFiles" />
+      <ComponentRef Id="Shortcuts" />
+    </Feature>
+  </Package>
+  <Fragment>
+    <Component Id="Shortcuts" Directory="ProgramMenuDirectory" Guid="8F0FB0CF-CF27-4310-8CE2-80CA73F3569D">
+      <Shortcut Id="ReaKillerStart" Name="ReaKiller" Description="Image conversion and PDF compression" Target="[INSTALLFOLDER]ReaKiller.Desktop.exe" WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveProgramsMenu" On="uninstall" />
+      <RegistryValue Root="HKLM" Key="Software\ZH Systems\ReaKiller" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>
