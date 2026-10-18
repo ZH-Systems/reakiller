@@ -14,6 +14,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ReaKiller.Desktop</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="../assets/ReaKiller.ico" Link="ReaKiller.ico" />
+  </ItemGroup>
   <Target Name="GenerateReaKillerIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../scripts/Generate-Icon.ps1&quot;" />
   </Target>
