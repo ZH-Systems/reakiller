@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <ApplicationIcon>../assets/ReaKiller.ico</ApplicationIcon>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
@@ -13,4 +14,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ReaKiller.Desktop</AssemblyName>
   </PropertyGroup>
+  <Target Name="GenerateReaKillerIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../scripts/Generate-Icon.ps1&quot;" />
+  </Target>
 </Project>
