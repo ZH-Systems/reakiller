@@ -2,6 +2,8 @@
   <Package Name="ReaKiller" Manufacturer="ZH Systems" Version="1.0.0" UpgradeCode="5D7C9311-54B1-4E3E-8398-1E7637097B25" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer version of ReaKiller is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <Icon Id="ReaKillerProductIcon" SourceFile="assets/ReaKiller.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ReaKillerProductIcon" />
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="ReaKiller" />
     </StandardDirectory>
