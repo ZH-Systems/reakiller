@@ -2,7 +2,7 @@
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:local="clr-namespace:ReaKiller.Desktop"
- Icon="../assets/ReaKiller.ico" Title="ReaKiller — File utilities" Width="1200" Height="800" MinWidth="920" MinHeight="620"
+ Icon="ReaKiller.ico" Title="ReaKiller — File utilities" Width="1200" Height="800" MinWidth="920" MinHeight="620"
  WindowStartupLocation="CenterScreen" Background="#F5F6F8" FontFamily="Segoe UI"
  AllowDrop="True" DragOver="Window_DragOver" Drop="Window_Drop">
  <Window.Resources>
