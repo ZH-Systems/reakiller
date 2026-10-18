@@ -66,6 +66,19 @@ jobs:
             }
             Write-Host "$name signed by $($signature.SignerCertificate.Subject)"
           }
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix --version 4.0.6
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path installers | Out-Null
+          ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
+          wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
+          if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReaKiller-MSI-win-x64
+          path: installers/ReaKiller-win-x64.msi
       - uses: actions/upload-artifact@v4
         with:
           name: ReaKiller-Desktop-win-x64
