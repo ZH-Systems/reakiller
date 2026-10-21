@@ -586,7 +586,7 @@ public partial class MainWindow : Window
                 "--sharpen", SharpenSlider.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) })
                 start.ArgumentList.Add(arg);
             if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
-            if (ResizeImages.IsChecked == true && int.TryParse(MaxWidthInput.Text, out var width) && width > 0
+            if (ResizeImages.IsChecked == true && int.TryParse(MaxWidthInput.Text, out var width) && width > 0)
             { start.ArgumentList.Add("--max-width"); start.ArgumentList.Add(width.ToString()); }
             using var process = Process.Start(start) ?? throw new IOException("Cannot start converter.");
             var outputTask = process.StandardOutput.ReadToEndAsync();
