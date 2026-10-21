@@ -196,6 +196,25 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(text)) return;
         Dispatcher.Invoke(() =>
         {
+            if (text.StartsWith("REAKILLER_BATCH:", StringComparison.Ordinal))
+            {
+                try
+                {
+                    using var json = JsonDocument.Parse(text["REAKILLER_BATCH:".Length..]);
+                    var data = json.RootElement;
+                    var batch = data.GetProperty("batch").GetInt32();
+                    var batches = data.GetProperty("batches").GetInt32();
+                    var completed = data.GetProperty("completed").GetInt32();
+                    var total = data.GetProperty("total").GetInt32();
+                    SummaryText.Text = $"Batch {batch:N0} of {batches:N0} ({completed:N0} of {total:N0} files completed)";
+                    ProgressText.Text = $"{completed:N0} / {total:N0} files";
+                    if (total > 0) Progress.Value = 100.0 * completed / total;
+                    Log.AppendText($"Starting batch {batch:N0} of {batches:N0}" + Environment.NewLine);
+                    Log.ScrollToEnd();
+                }
+                catch (Exception ex) { Log.AppendText("Batch progress parse warning: " + ex.Message + Environment.NewLine); }
+                return;
+            }
             if (text.StartsWith("REAKILLER_EVENT:", StringComparison.Ordinal))
             {
                 try
@@ -218,6 +237,8 @@ public partial class MainWindow : Window
                     if (_fileResults.Count > 2000) _fileResults.RemoveAt(0);
                     if (total > 0) Progress.Value = 100.0 * done / total;
                     ProgressText.Text = $"{done:N0} / {total:N0} files";
+                    if (data.TryGetProperty("batch", out var batchNumber) && data.TryGetProperty("batches", out var batchCount))
+                        SummaryText.Text = $"Batch {batchNumber.GetInt32():N0} of {batchCount.GetInt32():N0}";
                     ResultsList.ScrollIntoView(_fileResults[^1]);
                 }
                 catch (Exception ex) { Log.AppendText("Progress parse warning: " + ex.Message + Environment.NewLine); }
