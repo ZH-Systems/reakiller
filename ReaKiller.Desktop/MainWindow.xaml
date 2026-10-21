@@ -118,8 +118,8 @@
         <TextBox x:Name="Threads" Text="4"/>
        </StackPanel>
        <StackPanel Grid.Column="4">
-        <TextBlock Text="Max width" Style="{StaticResource FieldLabel}" ToolTip="Optional resize limit in pixels. Blank preserves dimensions."/>
-        <TextBox x:Name="MaxWidthInput"/>
+        <CheckBox x:Name="ResizeImages" Content="Resize images" IsChecked="False" ToolTip="Off by default. Keep the source image dimensions unless explicitly enabled."/>
+        <TextBox x:Name="MaxWidthInput" IsEnabled="{Binding IsChecked, ElementName=ResizeImages}" ToolTip="Maximum width in pixels; aspect ratio is preserved."/>
        </StackPanel>
       </Grid>
       <CheckBox x:Name="AdaptiveWorkers" Content="Automatically adjust workers for system load" IsChecked="True" Margin="0,15,0,0" ToolTip="Uses configured worker count as a maximum and adjusts admissions based on process CPU usage and GC memory pressure."/>
