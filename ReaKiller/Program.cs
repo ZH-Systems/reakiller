@@ -447,6 +447,8 @@ public static class ReaKiller
             planned.Add(target, files[i]);
         }
         var failed = false;
+        var batchTotal = (int)Math.Ceiling(files.Length / (double)options.BatchSize);
+        Console.WriteLine($"Workload split into {batchTotal:N0} batches ({files.Length:N0} files, up to {options.BatchSize:N0} per batch).");
         for (var start = 0; start < files.Length; start += options.BatchSize)
         {
             if (options.StopFile is not null && File.Exists(options.StopFile)) return 3;
@@ -468,14 +470,38 @@ public static class ReaKiller
                 child.StartInfo.ArgumentList.Add(list);
                 child.StartInfo.ArgumentList.Add("--index-offset");
                 child.StartInfo.ArgumentList.Add(start.ToString(CultureInfo.InvariantCulture));
-                Console.WriteLine($"Starting isolated batch {start / options.BatchSize + 1} ({count} files).");
+                var batchNumber = start / options.BatchSize + 1;
+                Console.WriteLine($"Starting batch {batchNumber:N0} of {batchTotal:N0} ({count:N0} files).");
+                Console.WriteLine("REAKILLER_BATCH:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, completed = start, total = files.Length, count }));
                 if (File.Exists(report)) File.Delete(report);
                 child.Start();
                 var stdout = Task.Run(async () =>
                 {
                     string? line;
                     while ((line = await child.StandardOutput.ReadLineAsync()) is not null)
+                    {
+                        if (line.StartsWith("REAKILLER_EVENT:", StringComparison.Ordinal))
+                        {
+                            try
+                            {
+                                using var json = JsonDocument.Parse(line["REAKILLER_EVENT:".Length..]);
+                                var evt = json.RootElement;
+                                Console.WriteLine("REAKILLER_EVENT:" + JsonSerializer.Serialize(new
+                                {
+                                    source = evt.GetProperty("source").GetString(),
+                                    status = evt.GetProperty("status").GetString(),
+                                    detail = evt.GetProperty("detail").GetString(),
+                                    done = start + evt.GetProperty("done").GetInt32(),
+                                    total = files.Length,
+                                    batch = batchNumber,
+                                    batches = batchTotal
+                                }));
+                                continue;
+                            }
+                            catch (JsonException) { /* Forward malformed events to the log for diagnostics. */ }
+                        }
                         Console.WriteLine(line);
+                    }
                 });
                 var stderr = Task.Run(async () =>
                 {
