@@ -17,7 +17,7 @@ public static class ReaKiller
 
     private sealed record Options(
         string Source, string Destination, bool Recursive, int Threads,
-        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers, string[] IncludeExtensions, string[] ExcludeExtensions, int BatchSize, int IndexOffset);
+        int? MaxWidth, int? MaxHeight, bool Overwrite, bool DryRun, bool InPlace, string Compression, int CompressionEffort, int Contrast, double Sharpen, bool AutoContrast, string NamePattern, string? StopFile, string? PauseFile, string? FilesFrom, string OutputFormat, bool OptimizeInPlace, bool AdaptiveWorkers, string[] IncludeExtensions, string[] ExcludeExtensions, int BatchSize, int IndexOffset);
 
     private sealed record Result(string Source, string Output, string Status, string Detail);
 
@@ -141,6 +141,7 @@ public static class ReaKiller
             new ParallelOptions { MaxDegreeOfParallelism = options.Threads },
             async (file, cancellationToken) =>
             {
+                if (!await WaitWhilePausedAsync(options.PauseFile, options.StopFile, cancellationToken)) return;
                 using var permit = limiter is null ? null : await limiter.EnterAsync(cancellationToken);
                 var fileResults = new List<Result>();
                 void Record(Result result) { results.Add(result); fileResults.Add(result); }
@@ -411,6 +412,16 @@ public static class ReaKiller
         return stopped > 0 ? 3 : failed > 0 ? 1 : 0;
     }
 
+    private static async Task<bool> WaitWhilePausedAsync(string? pauseFile, string? stopFile, CancellationToken ct = default)
+    {
+        while (pauseFile is not null && File.Exists(pauseFile))
+        {
+            if (stopFile is not null && File.Exists(stopFile)) return false;
+            await Task.Delay(250, ct);
+        }
+        return stopFile is null || !File.Exists(stopFile);
+    }
+
     private static async Task<int> RunIsolatedBatches(string[] args, Options options, string[] files)
     {
         var exe = Environment.ProcessPath ?? throw new IOException("ReaKiller executable not found.");
@@ -451,6 +462,7 @@ public static class ReaKiller
         Console.WriteLine($"Workload split into {batchTotal:N0} batches ({files.Length:N0} files, up to {options.BatchSize:N0} per batch).");
         for (var start = 0; start < files.Length; start += options.BatchSize)
         {
+            if (!await WaitWhilePausedAsync(options.PauseFile, options.StopFile)) return 3;
             if (options.StopFile is not null && File.Exists(options.StopFile)) return 3;
             var list = Path.Combine(Path.GetTempPath(), "reakiller-batch-" + Guid.NewGuid().ToString("N") + ".txt");
             var count = Math.Min(options.BatchSize, files.Length - start);
@@ -690,6 +702,7 @@ public static class ReaKiller
         string[] excludeExtensions = [];
         string namePattern = "{name}_{ext}";
         string? stopFile = null;
+        string? pauseFile = null;
         string? filesFrom = null;
         int? compressionEffort = null;
         int contrast = 0;
@@ -727,6 +740,7 @@ public static class ReaKiller
                 case "--auto-contrast": autoContrast = true; break;
                 case "--name-pattern": namePattern = Value(); break;
                 case "--stop-file": stopFile = Value(); break;
+                case "--pause-file": pauseFile = Value(); break;
                 case "--files-from": filesFrom = Value(); break;
                 case "--compression-effort":
                     if (!int.TryParse(Value(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var effort) || effort < 0 || effort > 100)
@@ -762,7 +776,7 @@ public static class ReaKiller
         if (optimizeInPlace && (maxWidth is not null || maxHeight is not null || contrast != 0 || sharpen != 0 || autoContrast)) throw new ArgumentException("Optimization mode cannot resize or enhance images.");
         ValidateNamePattern(namePattern);
         return new Options(source, output ?? "", recursive, threads,
-            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers, includeExtensions, excludeExtensions, batchSize, indexOffset);
+            maxWidth, maxHeight, overwrite, dryRun, inPlace, compressionMode, compressionEffort ?? (compressionMode == "max" ? 100 : 65), contrast, sharpen, autoContrast, namePattern, stopFile, pauseFile, filesFrom, outputFormat, optimizeInPlace, adaptiveWorkers, includeExtensions, excludeExtensions, batchSize, indexOffset);
     }
 
     private static void ValidateNamePattern(string pattern)
@@ -830,6 +844,7 @@ public static class ReaKiller
               --recursive, -r         Traverse subdirectories
               --threads <n>          Maximum concurrent conversion workers
               --adaptive-workers     Adjust worker admissions using CPU and memory pressure
+              --pause-file <path>    Pause new conversions while the marker file exists
               --max-width <pixels>   Optional maximum output width
               --max-height <pixels>  Optional maximum output height
               --compression <mode>   lossless|max (presets, overridden by effort)
