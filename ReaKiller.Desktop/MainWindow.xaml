@@ -43,8 +43,10 @@
      <Border Width="1" Background="#D7DCE3" Margin="15,4"/>
      <TextBlock Text="File utilities" VerticalAlignment="Center" FontSize="13" Foreground="#6C7785"/>
     </StackPanel>
-    <TextBlock Grid.Column="2" Text="Local image and PDF processing" VerticalAlignment="Center" Foreground="#6C7785" FontSize="12"
-     ToolTip="Process image files locally; no images are uploaded."/>
+    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+     <TextBlock Text="Local image and PDF processing" Foreground="#6C7785" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+     <Button Content="Check for updates" Click="CheckUpdates_Click" Padding="10,5" ToolTip="Check GitHub Releases for a newer signed MSI."/>
+    </StackPanel>
    </Grid>
   </Border>
   <TabControl x:Name="FeatureTabs" Grid.Row="1" Background="#F5F6F8" BorderThickness="0" Padding="0">
