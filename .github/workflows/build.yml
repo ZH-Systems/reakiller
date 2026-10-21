@@ -18,6 +18,129 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Set release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          if ($version -notmatch '^\d+\.\d+\.\d+        run: dotnet restore ReaKiller/ReaKiller.csproj
+      - name: Build
+        run: dotnet build ReaKiller/ReaKiller.csproj -c Release --no-restore
+      - name: Test
+        run: dotnet test ReaKiller.Tests/ReaKiller.Tests.csproj -c Release
+      - name: Publish
+        run: dotnet publish ReaKiller/ReaKiller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+      - name: Compile WPF desktop UI (fail early on XAML/C# errors)
+        run: dotnet build ReaKiller.Desktop/ReaKiller.Desktop.csproj -c Release
+      - name: Publish desktop UI
+        run: dotnet publish ReaKiller.Desktop/ReaKiller.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o desktop
+      - name: Publish standalone update helper
+        run: dotnet publish ReaKiller.Updater/ReaKiller.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o updater
+      - name: Assemble desktop bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle | Out-Null
+          Copy-Item desktop/* bundle/ -Recurse -Force
+          Copy-Item publish/* bundle/ -Recurse -Force
+          Copy-Item updater/* bundle/ -Recurse -Force
+      - name: Azure login for Artifact Signing
+        if: ${{ github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Authenticode sign Windows executables
+        if: ${{ github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true' }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ZH_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ZH_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ZH_ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\\bundle
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify code signatures
+        if: ${{ github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true' }}
+        shell: pwsh
+        run: |
+          foreach ($name in @("ReaKiller.exe", "ReaKiller.Desktop.exe", "ReaKiller.Updater.exe")) {
+            $path = Join-Path (Resolve-Path "bundle").Path $name
+            $signature = Get-AuthenticodeSignature -FilePath $path
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid or missing Authenticode signature: $name ($($signature.Status))"
+            }
+            Write-Host "$name signed by $($signature.SignerCertificate.Subject)"
+          }
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix --version 4.0.6
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path installers | Out-Null
+          ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
+          wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
+          if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
+      - name: Sign MSI for release
+        if: startsWith(github.ref, 'refs/tags/v') && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ZH_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ZH_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ZH_ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\\installers
+          files-folder-filter: msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify MSI release signature
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature installers/ReaKiller-win-x64.msi
+          if ($signature.Status -ne 'Valid') { throw "Unsigned or invalid MSI: $($signature.Status)" }
+      - name: Prepare versioned release packages
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          if ($version -notmatch '^\\d+\\.\\d+\\.\\d+
+        with:
+          name: ReaKiller-MSI-win-x64
+          path: installers/ReaKiller-win-x64.msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReaKiller-Desktop-win-x64
+          path: bundle/
+) { throw "Release tag must be vMajor.Minor.Patch." }
+          if ("${{ vars.ZH_ARTIFACT_SIGNING_ENABLED }}" -ne "true") { throw "Enable signing before publishing an automatically installable MSI." }
+          $hash = (Get-FileHash installers/ReaKiller-win-x64.msi -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path installers/ReaKiller-win-x64.msi.sha256 -Value "$hash  ReaKiller-win-x64.msi"
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create $env:GITHUB_REF_NAME installers/ReaKiller-win-x64.msi installers/ReaKiller-win-x64.msi.sha256 --generate-notes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReaKiller-MSI-win-x64
+          path: installers/ReaKiller-win-x64.msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReaKiller-Desktop-win-x64
+          path: bundle/
+) { throw "Release tags must be vMajor.Minor.Patch." }
+          foreach ($path in @("ReaKiller/ReaKiller.csproj", "ReaKiller.Desktop/ReaKiller.Desktop.csproj", "ReaKiller.Updater/ReaKiller.Updater.csproj")) {
+            $xml = Get-Content $path -Raw
+            $xml = [regex]::Replace($xml, '<Version>[^<]+</Version>', "<Version>$version</Version>")
+            Set-Content -Path $path -Value $xml -Encoding utf8
+          }
+          $wxs = Get-Content installer/ReaKiller.wxs -Raw
+          $wxs = $wxs.Replace('Version="1.0.0"', "Version=`"$version`"")
+          Set-Content installer/ReaKiller.wxs -Value $wxs -Encoding utf8
       - name: Restore
         run: dotnet restore ReaKiller/ReaKiller.csproj
       - name: Build
