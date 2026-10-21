@@ -19,6 +19,13 @@ public partial class MainWindow : Window
     private bool _running;
     private bool _cancelRequested;
     private string? _stopMarker;
+    private string? _pauseMarker;
+    private bool _paused;
+    private readonly Stopwatch _jobClock = new();
+    private TimeSpan _pausedTotal;
+    private TimeSpan _pauseStarted;
+    private int _completedFiles;
+    private int _totalFiles;
     private string? _lastReport;
     private string? _selectionListFile;
     private readonly List<string> _selectedFiles = new();
@@ -209,6 +216,7 @@ public partial class MainWindow : Window
                     SummaryText.Text = $"Batch {batch:N0} of {batches:N0} ({completed:N0} of {total:N0} files completed)";
                     ProgressText.Text = $"{completed:N0} / {total:N0} files";
                     if (total > 0) Progress.Value = 100.0 * completed / total;
+                    UpdateMetrics(completed, total);
                     Log.AppendText($"Starting batch {batch:N0} of {batches:N0}" + Environment.NewLine);
                     Log.ScrollToEnd();
                 }
@@ -236,6 +244,7 @@ public partial class MainWindow : Window
                     _fileResults.Add(new FileResult(Path.GetFileName(source), status == "SUCCEEDED" ? "Succeeded" : status == "FAILED" ? "Failed" : status == "STOPPED" ? "Stopped" : "Skipped", detail, color));
                     if (_fileResults.Count > 2000) _fileResults.RemoveAt(0);
                     if (total > 0) Progress.Value = 100.0 * done / total;
+                    UpdateMetrics(done, total);
                     ProgressText.Text = $"{done:N0} / {total:N0} files";
                     if (data.TryGetProperty("batch", out var batchNumber) && data.TryGetProperty("batches", out var batchCount))
                         SummaryText.Text = $"Batch {batchNumber.GetInt32():N0} of {batchCount.GetInt32():N0}";
@@ -308,6 +317,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!int.TryParse(BatchSizeInput.Text, out var batchSize) || batchSize < 1 || batchSize > 100000)
+        {
+            MessageBox.Show("Batch size must be between 1 and 100,000.", "Invalid batch size");
+            return;
+        }
+
         if ((inPlace || optimize) && MessageBox.Show(
                 "In-place mode removes each source file after conversion. Back up the folder first. Continue?",
                 "Confirm in-place replacement", MessageBoxButton.YesNo, MessageBoxImage.Warning)
@@ -323,6 +338,7 @@ public partial class MainWindow : Window
 
         _lastReport = null;
         _stopMarker = Path.Combine(Path.GetTempPath(), "reakiller-stop-" + Guid.NewGuid().ToString("N") + ".flag");
+        _pauseMarker = Path.Combine(Path.GetTempPath(), "reakiller-pause-" + Guid.NewGuid().ToString("N") + ".flag");
         OpenReportButton.IsEnabled = false;
         var start = new ProcessStartInfo(cli)
         {
@@ -342,6 +358,8 @@ public partial class MainWindow : Window
         }
         start.ArgumentList.Add("--stop-file");
         start.ArgumentList.Add(_stopMarker);
+        start.ArgumentList.Add("--pause-file");
+        start.ArgumentList.Add(_pauseMarker);
         start.ArgumentList.Add("--format");
         start.ArgumentList.Add(((ComboBoxItem)OutputFormat.SelectedItem).Tag.ToString()!);
         if (optimize) start.ArgumentList.Add("--optimize-in-place");
@@ -365,7 +383,7 @@ public partial class MainWindow : Window
         if (Overwrite.IsChecked == true) start.ArgumentList.Add("--overwrite");
         if (AdaptiveWorkers.IsChecked == true) start.ArgumentList.Add("--adaptive-workers");
         start.ArgumentList.Add("--batch-size");
-        start.ArgumentList.Add("500");
+        start.ArgumentList.Add(batchSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
         start.ArgumentList.Add("--threads");
         start.ArgumentList.Add(threads.ToString());
         start.ArgumentList.Add("--compression");
@@ -395,6 +413,16 @@ public partial class MainWindow : Window
         {
             _running = true;
             _cancelRequested = false;
+            _paused = false;
+            _pausedTotal = TimeSpan.Zero;
+            _pauseStarted = TimeSpan.Zero;
+            _completedFiles = 0;
+            _totalFiles = 0;
+            _jobClock.Restart();
+            PauseButton.Content = "Pause";
+            PauseButton.IsEnabled = true;
+            BatchSizeInput.IsEnabled = false;
+            MetricsText.Text = "Speed: calculating | Elapsed: 00:00:00 | ETA: —";
             StartButton.IsEnabled = false;
             ScanButton.IsEnabled = false;
             SourcePath.IsEnabled = false;
@@ -453,7 +481,16 @@ public partial class MainWindow : Window
                 try { File.Delete(_stopMarker); } catch (IOException) { }
                 _stopMarker = null;
             }
+            if (_pauseMarker is not null)
+            {
+                try { File.Delete(_pauseMarker); } catch (IOException) { }
+                _pauseMarker = null;
+            }
             _running = false;
+            _jobClock.Stop();
+            PauseButton.IsEnabled = false;
+            PauseButton.Content = "Pause";
+            BatchSizeInput.IsEnabled = true;
             StartButton.IsEnabled = true;
             ScanButton.IsEnabled = true;
             SourcePath.IsEnabled = true;
@@ -646,12 +683,50 @@ public partial class MainWindow : Window
         }
     }
 
+    private void UpdateMetrics(int completed, int total)
+    {
+        _completedFiles = completed;
+        _totalFiles = total;
+        var elapsed = _jobClock.Elapsed - _pausedTotal - (_paused ? _jobClock.Elapsed - _pauseStarted : TimeSpan.Zero);
+        var speed = elapsed.TotalSeconds > 0 ? completed / elapsed.TotalSeconds : 0;
+        var eta = speed > 0 && total >= completed ? TimeSpan.FromSeconds((total - completed) / speed).ToString(@"hh\:mm\:ss") : "—";
+        MetricsText.Text = $"Speed: {speed:F2} images/sec | Elapsed: {elapsed:hh\\:mm\\:ss} | ETA: {eta}";
+    }
+
+    private void Pause_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_running || _cancelRequested || _pauseMarker is null) return;
+        try
+        {
+            if (!_paused)
+            {
+                File.WriteAllText(_pauseMarker, "PAUSE");
+                _pauseStarted = _jobClock.Elapsed;
+                _paused = true;
+                PauseButton.Content = "Resume";
+                SummaryText.Text = "Pausing: active file conversions may finish before workers become idle.";
+            }
+            else
+            {
+                File.Delete(_pauseMarker);
+                _pausedTotal += _jobClock.Elapsed - _pauseStarted;
+                _paused = false;
+                PauseButton.Content = "Pause";
+                SummaryText.Text = "Resumed conversion.";
+            }
+            UpdateMetrics(_completedFiles, _totalFiles);
+        }
+        catch (Exception ex) { MessageBox.Show("Pause/resume failed: " + ex.Message, "Conversion control"); }
+    }
+
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         if (!_running || _cancelRequested || _stopMarker is null) return;
         try
         {
             File.WriteAllText(_stopMarker, "STOP");
+            if (_pauseMarker is not null && File.Exists(_pauseMarker)) File.Delete(_pauseMarker);
+            PauseButton.IsEnabled = false;
             _cancelRequested = true;
             CancelButton.IsEnabled = false;
             ProgressText.Text = "Stopping after active conversions...";
