@@ -29,8 +29,8 @@ var signatureCheck = new ProcessStartInfo("powershell.exe")
 signatureCheck.ArgumentList.Add("-NoProfile");
 signatureCheck.ArgumentList.Add("-NonInteractive");
 signatureCheck.ArgumentList.Add("-Command");
-signatureCheck.ArgumentList.Add("$s=Get-AuthenticodeSignature -LiteralPath $args[0]; if($s.Status -eq 'Valid' -and $s.SignerCertificate.Subject -match 'ZH Systems') {exit 0} else {exit 1}");
-signatureCheck.ArgumentList.Add(msi);
+signatureCheck.Environment["REAKILLER_MSI"] = msi;
+signatureCheck.ArgumentList.Add("$s=Get-AuthenticodeSignature -LiteralPath $env:REAKILLER_MSI; if($s.Status -eq 'Valid' -and $s.SignerCertificate.Subject -match 'ZH Systems') {exit 0} else {exit 1}");
 using (var check = Process.Start(signatureCheck)!)
 {
     await check.WaitForExitAsync();
