@@ -486,6 +486,8 @@ public static class ReaKiller
                 Console.WriteLine($"Starting batch {batchNumber:N0} of {batchTotal:N0} ({count:N0} files).");
                 Console.WriteLine("REAKILLER_BATCH:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, completed = start, total = files.Length, count }));
                 if (File.Exists(report)) File.Delete(report);
+                var batchTimer = Stopwatch.StartNew();
+                int batchCompleted = 0, batchFailed = 0, batchSkipped = 0;
                 child.Start();
                 var stdout = Task.Run(async () =>
                 {
@@ -498,6 +500,10 @@ public static class ReaKiller
                             {
                                 using var json = JsonDocument.Parse(line["REAKILLER_EVENT:".Length..]);
                                 var evt = json.RootElement;
+                                Interlocked.Increment(ref batchCompleted);
+                                var eventStatus = evt.GetProperty("status").GetString();
+                                if (eventStatus == "FAILED") Interlocked.Increment(ref batchFailed);
+                                if (eventStatus == "SKIPPED") Interlocked.Increment(ref batchSkipped);
                                 Console.WriteLine("REAKILLER_EVENT:" + JsonSerializer.Serialize(new
                                 {
                                     source = evt.GetProperty("source").GetString(),
@@ -523,6 +529,11 @@ public static class ReaKiller
                 });
                 await child.WaitForExitAsync();
                 await Task.WhenAll(stdout, stderr);
+                batchTimer.Stop();
+                var batchSeconds = Math.Max(0.001, batchTimer.Elapsed.TotalSeconds);
+                var batchRate = batchCompleted / batchSeconds;
+                Console.WriteLine($"Batch {batchNumber:N0}/{batchTotal:N0} finished: {batchCompleted:N0}/{count:N0} processed, {batchFailed:N0} failed, {batchSkipped:N0} skipped; {batchTimer.Elapsed:hh\\:mm\\:ss}; {batchRate:F2} images/sec.");
+                Console.WriteLine("REAKILLER_BATCH_RESULT:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, processed = batchCompleted, count, failed = batchFailed, skipped = batchSkipped, seconds = batchTimer.Elapsed.TotalSeconds, imagesPerSecond = batchRate, exitCode = child.ExitCode }));
                 if (File.Exists(report))
                 {
                     var part = await File.ReadAllLinesAsync(report);
