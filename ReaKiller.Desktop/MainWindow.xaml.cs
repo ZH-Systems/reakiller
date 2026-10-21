@@ -36,11 +36,50 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         ResultsList.ItemsSource = _fileResults;
+        Loaded += async (_, _) => await CheckUpdatesAsync(false);
         Closed += (_, _) =>
         {
             try { if (_process is { HasExited: false }) _process.Kill(entireProcessTree: true); }
             catch { /* Process may already have exited. */ }
         };
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e) =>
+        await CheckUpdatesAsync(true);
+
+    private async Task CheckUpdatesAsync(bool manual)
+    {
+        if (_running)
+        {
+            if (manual) MessageBox.Show("Finish or stop the current conversion before updating.", "ReaKiller updates");
+            return;
+        }
+        // Do not offer MSI upgrades to portable installations.
+        using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ZH Systems\ReaKiller");
+        if (key?.GetValue("Installed") is null)
+        {
+            if (manual) MessageBox.Show("Automatic updates require the MSI-installed edition. Download portable releases from GitHub.", "ReaKiller updates");
+            return;
+        }
+        try
+        {
+            var release = await UpdateService.CheckAsync();
+            if (release is null)
+            {
+                if (manual) MessageBox.Show("No newer signed MSI release is available.", "ReaKiller updates");
+                return;
+            }
+            if (_running) return;
+            var notes = release.Notes.Length > 900 ? release.Notes[..900] + "..." : release.Notes;
+            if (MessageBox.Show($"ReaKiller {release.Version} is available.\n\n{notes}\n\nInstall this update now? Administrator permission may be required.",
+                    "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes) return;
+            if (_running) return;
+            await UpdateService.DownloadAndLaunchAsync(release);
+        }
+        catch (Exception ex)
+        {
+            if (manual) MessageBox.Show("Unable to check or install updates: " + ex.Message, "ReaKiller updates");
+        }
     }
 
     private static string? BrowseFolder()
