@@ -66,7 +66,9 @@ internal static class UpdateService
             if (!Convert.ToHexString(await SHA256.HashDataAsync(file)).Equals(sha, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Installer checksum verification failed.");
         }
-        var start = new ProcessStartInfo(updater) { UseShellExecute = true };
+        var stagedUpdater = Path.Combine(directory, "ReaKiller.Updater.exe");
+        File.Copy(updater, stagedUpdater, true);
+        var start = new ProcessStartInfo(stagedUpdater) { UseShellExecute = true };
         foreach (var arg in new[] { "--install", msi, sha, Environment.ProcessId.ToString() })
             start.ArgumentList.Add(arg);
         Process.Start(start);
