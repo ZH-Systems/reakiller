@@ -280,7 +280,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text)
+        if (ResizeImages.IsChecked == true && !string.IsNullOrWhiteSpace(MaxWidthInput.Text)
             && (!int.TryParse(MaxWidthInput.Text, out int width) || width < 1))
         {
             MessageBox.Show("Max width must be a positive integer.", "Invalid maximum width");
@@ -364,7 +364,7 @@ public partial class MainWindow : Window
             start.ArgumentList.Add("--sharpen");
             start.ArgumentList.Add(SharpenSlider.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (!optimize && !string.IsNullOrWhiteSpace(MaxWidthInput.Text))
+        if (!optimize && ResizeImages.IsChecked == true && !string.IsNullOrWhiteSpace(MaxWidthInput.Text))
         {
             start.ArgumentList.Add("--max-width");
             start.ArgumentList.Add(MaxWidthInput.Text.Trim());
@@ -388,6 +388,7 @@ public partial class MainWindow : Window
             Compression.IsEnabled = false;
             Threads.IsEnabled = false;
             AdaptiveWorkers.IsEnabled = false;
+            ResizeImages.IsEnabled = false;
             MaxWidthInput.IsEnabled = false;
             NamePattern.IsEnabled = false;
             AutoContrast.IsEnabled = false;
@@ -446,7 +447,8 @@ public partial class MainWindow : Window
             Compression.IsEnabled = true;
             Threads.IsEnabled = true;
             AdaptiveWorkers.IsEnabled = true;
-            MaxWidthInput.IsEnabled = true;
+            ResizeImages.IsEnabled = true;
+            MaxWidthInput.IsEnabled = ResizeImages.IsChecked == true;
             NamePattern.IsEnabled = true;
             AutoContrast.IsEnabled = true;
             ContrastSlider.IsEnabled = true;
@@ -502,7 +504,7 @@ public partial class MainWindow : Window
             return;
         }
         int? width = null;
-        if (!string.IsNullOrWhiteSpace(MaxWidthInput.Text))
+        if (ResizeImages.IsChecked == true && !string.IsNullOrWhiteSpace(MaxWidthInput.Text))
         {
             if (!int.TryParse(MaxWidthInput.Text, out var parsed) || parsed < 1)
             {
@@ -543,6 +545,7 @@ public partial class MainWindow : Window
             AutoContrast.IsChecked = preset.AutoContrast;
             Threads.Text = preset.Threads.ToString();
             MaxWidthInput.Text = preset.MaxWidth?.ToString() ?? "";
+            ResizeImages.IsChecked = preset.MaxWidth.HasValue;
             Recursive.IsChecked = preset.Recursive;
             Overwrite.IsChecked = preset.Overwrite;
             NamePattern.Text = string.IsNullOrWhiteSpace(preset.NamePattern) ? "{name}_{ext}" : preset.NamePattern;
@@ -583,7 +586,7 @@ public partial class MainWindow : Window
                 "--sharpen", SharpenSlider.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) })
                 start.ArgumentList.Add(arg);
             if (AutoContrast.IsChecked == true) start.ArgumentList.Add("--auto-contrast");
-            if (int.TryParse(MaxWidthInput.Text, out var width) && width > 0)
+            if (ResizeImages.IsChecked == true && int.TryParse(MaxWidthInput.Text, out var width) && width > 0
             { start.ArgumentList.Add("--max-width"); start.ArgumentList.Add(width.ToString()); }
             using var process = Process.Start(start) ?? throw new IOException("Cannot start converter.");
             var outputTask = process.StandardOutput.ReadToEndAsync();
