@@ -176,6 +176,7 @@
       </DockPanel>
       <ProgressBar x:Name="Progress" Height="12" Minimum="0" Maximum="100"
        ToolTip="Visual progress updates for each completed image."/>
+      <TextBlock x:Name="MetricsText" Text="Speed: — images/sec | Elapsed: — | ETA: —" Foreground="#485465" FontSize="12" Margin="0,10,0,0"/>
       <TextBlock x:Name="SummaryText" Text="Select images and start a conversion." Foreground="#6C7785" FontSize="12" Margin="0,10,0,0"/>
      </StackPanel>
     </Border>
@@ -212,6 +213,15 @@
   </Grid>
   </TabItem>
   <TabItem Header="PDF compression"><local:PdfCompressionTab /></TabItem>
+  <TabItem Header="Advanced settings">
+   <StackPanel Margin="24" MaxWidth="620" HorizontalAlignment="Left">
+    <TextBlock Text="Advanced conversion settings" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16"/>
+    <TextBlock Text="Batch size" Style="{StaticResource FieldLabel}"/>
+    <TextBox x:Name="BatchSizeInput" Text="500" Width="130" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+    <TextBlock Text="Number of files per isolated converter process. Smaller batches restart more often; larger batches may consume more native resources." TextWrapping="Wrap" Foreground="#6C7785"/>
+    <TextBlock Text="Changes apply to the next conversion. Default: 500 files per batch." Margin="0,12,0,0" Foreground="#6C7785"/>
+   </StackPanel>
+  </TabItem>
   </TabControl>
   <Border Grid.Row="2" Background="White" BorderBrush="#E0E4EA" BorderThickness="0,1,0,0">
    <Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding SelectedIndex, ElementName=FeatureTabs}" Value="1"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
@@ -219,6 +229,7 @@
     <TextBlock Text="Files are processed locally. Originals are kept unless replacement is enabled."
      VerticalAlignment="Center" Foreground="#6C7785" FontSize="12"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+     <Button x:Name="PauseButton" Content="Pause" Style="{StaticResource SecondaryButton}" MinWidth="90" IsEnabled="False" Click="Pause_Click" Margin="0,0,10,0" ToolTip="Pause before new files start; active images complete safely."/>
      <Button x:Name="CancelButton" Content="Stop conversion" Style="{StaticResource DangerButton}" MinWidth="130" IsEnabled="False"
       Click="Cancel_Click" ToolTip="Request a safe stop. Completed output files remain." Margin="0,0,10,0"/>
      <Button x:Name="StartButton" Content="Start conversion" MinWidth="148" Click="Start_Click"/>
