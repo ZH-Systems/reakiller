@@ -203,6 +203,29 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(text)) return;
         Dispatcher.Invoke(() =>
         {
+            if (text.StartsWith("REAKILLER_BATCH_RESULT:", StringComparison.Ordinal))
+            {
+                try
+                {
+                    using var json = JsonDocument.Parse(text["REAKILLER_BATCH_RESULT:".Length..]);
+                    var data = json.RootElement;
+                    var batch = data.GetProperty("batch").GetInt32();
+                    var batches = data.GetProperty("batches").GetInt32();
+                    var processed = data.GetProperty("processed").GetInt32();
+                    var count = data.GetProperty("count").GetInt32();
+                    var failed = data.GetProperty("failed").GetInt32();
+                    var skipped = data.GetProperty("skipped").GetInt32();
+                    var seconds = data.GetProperty("seconds").GetDouble();
+                    var speed = data.GetProperty("imagesPerSecond").GetDouble();
+                    var message = $"Batch {batch:N0}/{batches:N0}: {processed:N0}/{count:N0} files, {failed:N0} failed, {skipped:N0} skipped, {TimeSpan.FromSeconds(seconds):hh\\:mm\\:ss}, {speed:F2} images/sec";
+                    SummaryText.Text = message;
+                    Log.AppendText(message + Environment.NewLine);
+                    if (Log.Text.Length > 16000) Log.Text = Log.Text[^12000..];
+                    Log.ScrollToEnd();
+                }
+                catch (Exception ex) { Log.AppendText("Batch metrics parse warning: " + ex.Message + Environment.NewLine); }
+                return;
+            }
             if (text.StartsWith("REAKILLER_BATCH:", StringComparison.Ordinal))
             {
                 try
