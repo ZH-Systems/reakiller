@@ -151,6 +151,14 @@ The presets use Ghostscript's `pdfwrite` device: **High quality** (`/printer`), 
 
 Output is written as `<name>_compressed.pdf` in the selected destination. Source PDFs are preserved, existing outputs are skipped, incomplete temporary files are cleaned up, and the default setting skips new outputs that are not smaller. Rewriting a PDF can affect quality, forms, annotations, metadata and digital signatures, so verify important documents before use. Ghostscript's AGPL/commercial licensing applies; ReaKiller does not redistribute it.
 
+### Compress an entire PDF folder
+
+In the **PDF Compression** tab, select **Choose entire folder** and choose the source directory. **Include PDFs in subfolders** is enabled by default; disable it to process only PDFs immediately inside the selected directory. Choose an output folder and press **Compress PDFs**. The app preserves the source's relative subfolder structure in the destination and writes each result as `<name>_compressed.pdf`.
+
+The previously available **Choose files** picker remains available for individual files or multi-file selection. Source PDFs are never deleted or overwritten. Existing output PDFs are skipped. If the destination is located under the source folder, it is excluded from recursive discovery, including when a prior output already exists. Selecting the source folder itself as the output destination is rejected. Processing continues past individual file errors; progress and per-file statuses are displayed in the PDF results grid.
+
+Folder mode is implemented in the Windows desktop UI, not as a new command-line argument. Windows compilation and a live Ghostscript batch test remain outstanding.
+
 ## Image output selection and in-place optimization
 
 The Image Conversion tab supports choosing **PNG (lossless)** or **JPEG (lossy)** output. The CLI equivalent is `--format png` or `--format jpg`. JPEG output currently uses encoder quality 90. Conversion into JPEG can reduce file sizes but changes image pixels and must not be mistaken for a lossless medical-image export.
