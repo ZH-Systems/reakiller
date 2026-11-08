@@ -15,7 +15,9 @@
       <TextBox x:Name="SelectionSummary" IsReadOnly="True" Text="No files selected"/>
       <Button Grid.Column="1" Content="Choose files" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="ChooseFiles_Click"/>
      </Grid>
-     <TextBlock x:Name="SelectedCount" Text="Select one or more PDFs." Foreground="#6C7785" Margin="0,8,0,20" FontSize="12"/>
+     <Button Content="Choose entire folder" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="ChooseFolder_Click"/>
+     <CheckBox x:Name="RecursiveScan" Content="Include PDFs in subfolders" IsChecked="True" Checked="RecursiveScan_Changed" Unchecked="RecursiveScan_Changed" Margin="0,12,0,0"/>
+     <TextBlock x:Name="SelectedCount" Text="Select PDFs or an entire folder." Foreground="#6C7785" Margin="0,8,0,20" FontSize="12"/>
      <TextBlock Text="Output folder" FontWeight="SemiBold" Foreground="#485465" Margin="0,0,0,7"/>
      <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
