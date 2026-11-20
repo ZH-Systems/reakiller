@@ -12,7 +12,7 @@ public static class ReaKiller
 {
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".img", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
+        ".img", ".rvg", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
     };
 
     private sealed record Options(
@@ -182,7 +182,7 @@ public static class ReaKiller
 
                     Directory.CreateDirectory(destinationSubfolder);
                     var readSettings = new MagickReadSettings();
-                    if (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase))
+                    if (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase))
                     {
                         var signature = ReadSignature(file);
                         if (signature == "JPEG")
@@ -197,7 +197,7 @@ public static class ReaKiller
                             readSettings.Format = MagickFormat.Bmp;
                         else
                             throw new NotSupportedException(
-                                "Unrecognized .IMG signature. This file is not a JPEG/TIFF/DICOM variant supported by the initial decoder.");
+                                "Unrecognized image signature (.IMG/.CMP/.RVG). Carestream RVG files must contain a recognized DICOM, JPEG, TIFF, PNG or BMP image; unsupported proprietary variants are not converted.");
                     }
 
                     if (Path.GetExtension(file).Equals(".dic", StringComparison.OrdinalIgnoreCase))
@@ -206,6 +206,8 @@ public static class ReaKiller
                     if (Path.GetExtension(file).Equals(".dcm", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file).Equals(".dic", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file).Equals(".dicom", StringComparison.OrdinalIgnoreCase)
+                        || (Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase)
+                            && ReadSignature(file) == "DICOM")
                         || (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase)
                             && ReadSignature(file) == "DICOM") || (Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase)
                             && ReadSignature(file) == "DICOM"))
