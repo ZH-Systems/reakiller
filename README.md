@@ -27,7 +27,11 @@ ReaKiller.exe convert "D:\Images" --output "D:\Converted" --recursive --max-widt
 ReaKiller.exe convert "D:\Images" --output "D:\Converted" --dry-run
 ```
 
-Supports extensions: .img, .dcm, .dicom, .jpg, .jpeg, .tif, .tiff. Options include --recursive, --threads N, --overwrite, --dry-run, --max-width, --max-height. Output names include the source extension to avoid collisions (e.g. I11624_img.png). Multipage output has page-number suffixes. Results are logged to reakiller-report.csv. Originals are preserved by default. With `--in-place`, the source file is deleted after validated PNG conversion. Output must be outside the input directory tree.
+Supports extensions: .img, .rvg, .dcm, .dic, .dicom, .jpg, .jpeg, .tif, .tiff (plus PNG, BMP, CMP, and PCX). Options include --recursive, --threads N, --overwrite, --dry-run, --max-width, --max-height. Output names include the source extension to avoid collisions (e.g. I11624_img.png). Multipage output has page-number suffixes. Results are logged to reakiller-report.csv. Originals are preserved by default. With `--in-place`, the source file is deleted after validated PNG conversion. Output must be outside the input directory tree.
+
+## Carestream RVG images
+
+Carestream `.rvg` files are accepted by the CLI and Windows image picker. ReaKiller inspects the file signature and converts RVG files containing standard DICOM, JPEG, TIFF, PNG, or BMP payloads using the existing conversion pipeline. DICOM RVG files are checked for PixelData before conversion. Unsupported or proprietary RVG encodings fail explicitly and leave source files intact. This is **not** a proprietary Carestream RVG decoder; test on a representative file from the originating system and validate diagnostic appearance before using exports clinically. Original file timestamps follow the existing preservation behavior.
 
 ## Limitations
 
