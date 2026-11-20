@@ -96,6 +96,43 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public async Task CarestreamRvgWithStandardJpegPayloadConverts()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "carestream.rvg");
+            var output = Path.Combine(root, "converted");
+            WriteJpeg(source);
+            var code = await ReaKiller.RunAsync(["convert", source, "--output", output]);
+            Assert.Equal(0, code);
+            Assert.True(File.Exists(source));
+            using var converted = new MagickImage(Path.Combine(output, "carestream_rvg.png"));
+            Assert.Equal(32u, converted.Width);
+            Assert.Equal(24u, converted.Height);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task UnknownCarestreamRvgIsRejectedWithoutDeletingSource()
+    {
+        var root = NewFolder();
+        try
+        {
+            var source = Path.Combine(root, "unknown.rvg");
+            var output = Path.Combine(root, "converted");
+            await File.WriteAllTextAsync(source, "not a supported Carestream image payload");
+            var original = await File.ReadAllBytesAsync(source);
+            var code = await ReaKiller.RunAsync(["convert", source, "--output", output, "--in-place"]);
+            Assert.NotEqual(0, code);
+            Assert.Equal(original, await File.ReadAllBytesAsync(source));
+            Assert.False(File.Exists(Path.Combine(root, "unknown_rvg.png")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CarestreamCmpWithStandardJpegSignatureConverts()
     {
         var root = NewFolder();
