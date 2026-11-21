@@ -5,11 +5,24 @@ using System.Text;
 using System.Text.Json;
 using ImageMagick;
 using FellowOakDicom;
+using FellowOakDicom.Imaging.Codec;
+using FellowOakDicom.Imaging.NativeCodec;
+using Microsoft.Extensions.DependencyInjection;
 
 return await ReaKiller.RunAsync(args);
 
 public static class ReaKiller
 {
+    private static readonly Lazy<bool> NativeDicomCodecsReady = new(() =>
+    {
+        new DicomSetupBuilder()
+            .RegisterServices(services => services.AddFellowOakDicom()
+                .AddTranscoderManager<NativeTranscoderManager>())
+            .SkipValidation()
+            .Build();
+        return true;
+    });
+
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
         ".img", ".rvg", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
@@ -31,6 +44,8 @@ public static class ReaKiller
             PrintUsage();
             return 0;
         }
+
+        _ = NativeDicomCodecsReady.Value;
 
         Options options;
         try { options = Parse(args); }
@@ -226,7 +241,31 @@ public static class ReaKiller
                     var sourceAccessedUtc = File.GetLastAccessTimeUtc(file);
 
                     using var pages = new MagickImageCollection();
-                    pages.Read(file, readSettings);
+                    // Some Carestream RVG DICOMs contain JPEG Lossless Process 14 SV1.
+                    // Transcode compressed DICOM to a temporary uncompressed file.
+                    // The original RVG is never modified by this decoding stage.
+                    string? decodedDicomPath = null;
+                    try
+                    {
+                        if (Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase)
+                            && ReadSignature(file) == "DICOM")
+                        {
+                            var originalDicom = DicomFile.Open(file);
+                            if (originalDicom.FileMetaInfo.TransferSyntax.IsEncapsulated)
+                            {
+                                decodedDicomPath = Path.Combine(
+                                    Path.GetTempPath(), "reakiller-" + Guid.NewGuid().ToString("N") + ".dcm");
+                                originalDicom.Clone(DicomTransferSyntax.ExplicitVRLittleEndian)
+                                    .Save(decodedDicomPath);
+                            }
+                        }
+                        pages.Read(decodedDicomPath ?? file, readSettings);
+                    }
+                    finally
+                    {
+                        if (decodedDicomPath is not null && File.Exists(decodedDicomPath))
+                            File.Delete(decodedDicomPath);
+                    }
                     if (pages.Count == 0) throw new InvalidDataException("No image pages decoded.");
 
                     var staged = new List<(string Temporary, string Output)>();
