@@ -241,30 +241,16 @@ public static class ReaKiller
                     var sourceAccessedUtc = File.GetLastAccessTimeUtc(file);
 
                     using var pages = new MagickImageCollection();
-                    // Some Carestream RVG DICOMs contain JPEG Lossless Process 14 SV1.
-                    // Transcode compressed DICOM to a temporary uncompressed file.
-                    // The original RVG is never modified by this decoding stage.
-                    string? decodedDicomPath = null;
-                    try
+                    if (Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase)
+                        && ReadSignature(file) == "DICOM")
                     {
-                        if (Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase)
-                            && ReadSignature(file) == "DICOM")
-                        {
-                            var originalDicom = DicomFile.Open(file);
-                            if (originalDicom.FileMetaInfo.TransferSyntax.IsEncapsulated)
-                            {
-                                decodedDicomPath = Path.Combine(
-                                    Path.GetTempPath(), "reakiller-" + Guid.NewGuid().ToString("N") + ".dcm");
-                                originalDicom.Clone(DicomTransferSyntax.ExplicitVRLittleEndian)
-                                    .Save(decodedDicomPath);
-                            }
-                        }
-                        pages.Read(decodedDicomPath ?? file, readSettings);
+                        // Decode pixels with fo-dicom, not ImageMagick's DICOM parser.
+                        // The latter rejects some valid Carestream 12-bit lossless images.
+                        ReadCarestreamRvgPages(file, pages);
                     }
-                    finally
+                    else
                     {
-                        if (decodedDicomPath is not null && File.Exists(decodedDicomPath))
-                            File.Delete(decodedDicomPath);
+                        pages.Read(file, readSettings);
                     }
                     if (pages.Count == 0) throw new InvalidDataException("No image pages decoded.");
 
@@ -717,6 +703,77 @@ public static class ReaKiller
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         return full.Equals(root, StringComparison.OrdinalIgnoreCase)
             || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ReadCarestreamRvgPages(string path, MagickImageCollection pages)
+    {
+        var dicomFile = DicomFile.Open(path);
+        var dataset = dicomFile.FileMetaInfo.TransferSyntax.IsEncapsulated
+            ? dicomFile.Clone(DicomTransferSyntax.ExplicitVRLittleEndian).Dataset
+            : dicomFile.Dataset;
+        var pixels = FellowOakDicom.Imaging.DicomPixelData.Create(dataset);
+
+        var rows = dataset.GetSingleValue<ushort>(DicomTag.Rows);
+        var columns = dataset.GetSingleValue<ushort>(DicomTag.Columns);
+        var allocated = dataset.GetSingleValue<ushort>(DicomTag.BitsAllocated);
+        var stored = dataset.GetSingleValue<ushort>(DicomTag.BitsStored);
+        var highBit = dataset.GetSingleValue<ushort>(DicomTag.HighBit);
+        var representation = dataset.GetSingleValue<ushort>(DicomTag.PixelRepresentation);
+        var samples = dataset.GetSingleValue<ushort>(DicomTag.SamplesPerPixel);
+        var photometric = dataset.GetSingleValue<string>(DicomTag.PhotometricInterpretation).Trim();
+
+        if (rows == 0 || columns == 0 || samples != 1 || representation != 0
+            || (allocated != 8 && allocated != 16) || stored == 0
+            || stored > allocated || highBit != stored - 1
+            || (photometric != "MONOCHROME1" && photometric != "MONOCHROME2"))
+            throw new NotSupportedException(
+                "Unsupported Carestream RVG pixel format. Only unsigned 8/16-bit monochrome images are supported.");
+
+        var pixelCount = checked((int)rows * columns);
+        var bytesPerPixel = allocated / 8;
+        var expectedSize = checked(pixelCount * bytesPerPixel);
+        var inputMask = (1u << stored) - 1u;
+
+        for (var frameIndex = 0; frameIndex < pixels.NumberOfFrames; frameIndex++)
+        {
+            var frame = pixels.GetFrame(frameIndex).Data;
+            if (frame.Length != expectedSize && !(expectedSize % 2 == 1 && frame.Length == expectedSize + 1))
+                throw new InvalidDataException(
+                    $"Decoded RVG frame has {frame.Length} bytes, expected {expectedSize}.");
+
+            // Use explicit RGB channels for a neutral grayscale PNG.
+            // Expand 12-bit samples into 16-bit output without windowing or clipping.
+            var rgb = new byte[checked(pixelCount * 6)];
+            for (var i = 0; i < pixelCount; i++)
+            {
+                var value = allocated == 8
+                    ? (uint)frame[i]
+                    : (uint)(frame[i * 2] | (frame[i * 2 + 1] << 8));
+                value &= inputMask;
+                if (photometric == "MONOCHROME1")
+                    value = inputMask - value;
+                var scaled = (ushort)(value * 65535u / inputMask);
+                var offset = i * 6;
+                for (var channel = 0; channel < 3; channel++)
+                {
+                    rgb[offset + channel * 2] = (byte)scaled;
+                    rgb[offset + channel * 2 + 1] = (byte)(scaled >> 8);
+                }
+            }
+
+            var image = new MagickImage();
+            try
+            {
+                image.ReadPixels(rgb,
+                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.Short, "RGB"));
+                pages.Add(image);
+            }
+            catch
+            {
+                image.Dispose();
+                throw;
+            }
+        }
     }
 
     private static string ReadSignature(string path)
