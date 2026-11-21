@@ -5,14 +5,27 @@ using System.Text;
 using System.Text.Json;
 using ImageMagick;
 using FellowOakDicom;
+using FellowOakDicom.Imaging.Codec;
+using FellowOakDicom.Imaging.NativeCodec;
+using Microsoft.Extensions.DependencyInjection;
 
 return await ReaKiller.RunAsync(args);
 
 public static class ReaKiller
 {
+    private static readonly Lazy<bool> NativeDicomCodecsReady = new(() =>
+    {
+        new DicomSetupBuilder()
+            .RegisterServices(services => services.AddFellowOakDicom()
+                .AddTranscoderManager<NativeTranscoderManager>())
+            .SkipValidation()
+            .Build();
+        return true;
+    });
+
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".img", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
+        ".img", ".rvg", ".dcm", ".dic", ".dicom", ".jpg", ".jpeg", ".png", ".bmp", ".cmp", ".pcx", ".tif", ".tiff"
     };
 
     private sealed record Options(
@@ -31,6 +44,8 @@ public static class ReaKiller
             PrintUsage();
             return 0;
         }
+
+        _ = NativeDicomCodecsReady.Value;
 
         Options options;
         try { options = Parse(args); }
@@ -182,7 +197,7 @@ public static class ReaKiller
 
                     Directory.CreateDirectory(destinationSubfolder);
                     var readSettings = new MagickReadSettings();
-                    if (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase))
+                    if (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase))
                     {
                         var signature = ReadSignature(file);
                         if (signature == "JPEG")
@@ -197,7 +212,7 @@ public static class ReaKiller
                             readSettings.Format = MagickFormat.Bmp;
                         else
                             throw new NotSupportedException(
-                                "Unrecognized .IMG signature. This file is not a JPEG/TIFF/DICOM variant supported by the initial decoder.");
+                                "Unrecognized image signature (.IMG/.CMP/.RVG). Carestream RVG files must contain a recognized DICOM, JPEG, TIFF, PNG or BMP image; unsupported proprietary variants are not converted.");
                     }
 
                     if (Path.GetExtension(file).Equals(".dic", StringComparison.OrdinalIgnoreCase))
@@ -206,6 +221,8 @@ public static class ReaKiller
                     if (Path.GetExtension(file).Equals(".dcm", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file).Equals(".dic", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file).Equals(".dicom", StringComparison.OrdinalIgnoreCase)
+                        || (Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase)
+                            && ReadSignature(file) == "DICOM")
                         || (Path.GetExtension(file).Equals(".img", StringComparison.OrdinalIgnoreCase)
                             && ReadSignature(file) == "DICOM") || (Path.GetExtension(file).Equals(".cmp", StringComparison.OrdinalIgnoreCase)
                             && ReadSignature(file) == "DICOM"))
@@ -224,7 +241,31 @@ public static class ReaKiller
                     var sourceAccessedUtc = File.GetLastAccessTimeUtc(file);
 
                     using var pages = new MagickImageCollection();
-                    pages.Read(file, readSettings);
+                    // Some Carestream RVG DICOMs contain JPEG Lossless Process 14 SV1.
+                    // Transcode compressed DICOM to a temporary uncompressed file.
+                    // The original RVG is never modified by this decoding stage.
+                    string? decodedDicomPath = null;
+                    try
+                    {
+                        if (Path.GetExtension(file).Equals(".rvg", StringComparison.OrdinalIgnoreCase)
+                            && ReadSignature(file) == "DICOM")
+                        {
+                            var originalDicom = DicomFile.Open(file);
+                            if (originalDicom.FileMetaInfo.TransferSyntax.IsEncapsulated)
+                            {
+                                decodedDicomPath = Path.Combine(
+                                    Path.GetTempPath(), "reakiller-" + Guid.NewGuid().ToString("N") + ".dcm");
+                                originalDicom.Clone(DicomTransferSyntax.ExplicitVRLittleEndian)
+                                    .Save(decodedDicomPath);
+                            }
+                        }
+                        pages.Read(decodedDicomPath ?? file, readSettings);
+                    }
+                    finally
+                    {
+                        if (decodedDicomPath is not null && File.Exists(decodedDicomPath))
+                            File.Delete(decodedDicomPath);
+                    }
                     if (pages.Count == 0) throw new InvalidDataException("No image pages decoded.");
 
                     var staged = new List<(string Temporary, string Output)>();

@@ -27,7 +27,11 @@ ReaKiller.exe convert "D:\Images" --output "D:\Converted" --recursive --max-widt
 ReaKiller.exe convert "D:\Images" --output "D:\Converted" --dry-run
 ```
 
-Supports extensions: .img, .dcm, .dicom, .jpg, .jpeg, .tif, .tiff. Options include --recursive, --threads N, --overwrite, --dry-run, --max-width, --max-height. Output names include the source extension to avoid collisions (e.g. I11624_img.png). Multipage output has page-number suffixes. Results are logged to reakiller-report.csv. Originals are preserved by default. With `--in-place`, the source file is deleted after validated PNG conversion. Output must be outside the input directory tree.
+Supports extensions: .img, .rvg, .dcm, .dic, .dicom, .jpg, .jpeg, .tif, .tiff (plus PNG, BMP, CMP, and PCX). Options include --recursive, --threads N, --overwrite, --dry-run, --max-width, --max-height. Output names include the source extension to avoid collisions (e.g. I11624_img.png). Multipage output has page-number suffixes. Results are logged to reakiller-report.csv. Originals are preserved by default. With `--in-place`, the source file is deleted after validated PNG conversion. Output must be outside the input directory tree.
+
+## Carestream RVG images
+
+Carestream `.rvg` files are accepted by the CLI and Windows image picker. An actual supplied RVG sample was identified as DICOM JPEG Lossless Process 14 SV1 (transfer syntax `1.2.840.10008.1.2.4.70`), which ImageMagick cannot decode directly. Encapsulated RVG DICOM files are now transcoded to temporary uncompressed Explicit VR Little Endian DICOM files with `fo-dicom.Codecs`, rendered through the existing pipeline, and removed in a `finally` block. Standard JPEG, TIFF, PNG and BMP payloads also remain supported. DICOM RVG files are checked for PixelData before conversion. Unsupported or proprietary RVG encodings fail explicitly and leave source files intact. This supports known DICOM-encoded Carestream RVG formats, including JPEG Lossless Process 14 SV1, but **not** undocumented proprietary formats. Validate output contrast, orientation, dimensions, and diagnostic appearance against the source Carestream application. Windows native codec deployment and end-to-end conversion require validation. Original file timestamps follow the existing preservation behavior.
 
 ## Limitations
 
