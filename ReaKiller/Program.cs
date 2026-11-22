@@ -732,6 +732,12 @@ public static class ReaKiller
         var pixelCount = checked((int)rows * columns);
         var bytesPerPixel = allocated / 8;
         var expectedSize = checked(pixelCount * bytesPerPixel);
+        // JPEG Lossless decoders return samples left-aligned in the allocated word.
+        // For this Carestream image, 12 stored bits occupy bits 15..4, not bits 11..0.
+        // Shift according to DICOM HighBit/BitsStored before applying the stored-bit mask.
+        var sampleShift = highBit + 1 - stored;
+        if (sampleShift < 0 || highBit >= allocated)
+            throw new InvalidDataException("Invalid DICOM HighBit/BitsStored alignment.");
         var inputMask = (1u << stored) - 1u;
 
         for (var frameIndex = 0; frameIndex < pixels.NumberOfFrames; frameIndex++)
@@ -742,14 +748,16 @@ public static class ReaKiller
                     $"Decoded RVG frame has {frame.Length} bytes, expected {expectedSize}.");
 
             // Use explicit RGB channels for a neutral grayscale PNG.
-            // Expand 12-bit samples into 16-bit output without windowing or clipping.
+            // Expand unsigned 12-bit samples into unsigned 16-bit output without changing their sign.
+            // DICOM PixelRepresentation=0 is unsigned; StorageType.Short would reinterpret values
+            // above 32767 as negative and corrupt the grayscale range.
             var rgb = new byte[checked(pixelCount * 6)];
             for (var i = 0; i < pixelCount; i++)
             {
                 var value = allocated == 8
                     ? (uint)frame[i]
                     : (uint)(frame[i * 2] | (frame[i * 2 + 1] << 8));
-                value &= inputMask;
+                value = (value >> sampleShift) & inputMask;
                 if (photometric == "MONOCHROME1")
                     value = inputMask - value;
                 var scaled = (ushort)(value * 65535u / inputMask);
@@ -765,7 +773,7 @@ public static class ReaKiller
             try
             {
                 image.ReadPixels(rgb,
-                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.Short, "RGB"));
+                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.UShort, "RGB"));
                 pages.Add(image);
             }
             catch
