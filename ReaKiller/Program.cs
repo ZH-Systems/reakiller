@@ -742,7 +742,9 @@ public static class ReaKiller
                     $"Decoded RVG frame has {frame.Length} bytes, expected {expectedSize}.");
 
             // Use explicit RGB channels for a neutral grayscale PNG.
-            // Expand 12-bit samples into 16-bit output without windowing or clipping.
+            // Expand unsigned 12-bit samples into unsigned 16-bit output without changing their sign.
+            // DICOM PixelRepresentation=0 is unsigned; StorageType.Short would reinterpret values
+            // above 32767 as negative and corrupt the grayscale range.
             var rgb = new byte[checked(pixelCount * 6)];
             for (var i = 0; i < pixelCount; i++)
             {
@@ -765,7 +767,7 @@ public static class ReaKiller
             try
             {
                 image.ReadPixels(rgb,
-                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.Short, "RGB"));
+                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.UShort, "RGB"));
                 pages.Add(image);
             }
             catch
