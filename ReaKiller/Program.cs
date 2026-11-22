@@ -773,7 +773,7 @@ public static class ReaKiller
             try
             {
                 image.ReadPixels(rgb,
-                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.UShort, "RGB"));
+                    new PixelReadSettings((uint)columns, (uint)rows, StorageType.Short, PixelMapping.RGB));
                 pages.Add(image);
             }
             catch
