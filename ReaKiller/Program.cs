@@ -747,10 +747,18 @@ public static class ReaKiller
                 throw new InvalidDataException(
                     $"Decoded RVG frame has {frame.Length} bytes, expected {expectedSize}.");
 
-            // Use explicit RGB channels for a neutral grayscale PNG.
-            // Expand unsigned 12-bit samples into unsigned 16-bit output without changing their sign.
-            // DICOM PixelRepresentation=0 is unsigned; StorageType.Short would reinterpret values
-            // above 32767 as negative and corrupt the grayscale range.
+            // Carestream "FOR PROCESSING" RVG images have no display VOI/window.
+            // A full 0..(2^BitsStored-1) grayscale mapping is excessively flat.
+            // Estimate a robust display window from the nonzero decoded samples.
+            // This changes only the display export, not the source DICOM pixels.
+            var hasDicomDisplayWindow = dataset.Contains(DicomTag.WindowCenter)
+                && dataset.Contains(DicomTag.WindowWidth);
+            var (windowLow, windowHigh) = hasDicomDisplayWindow
+                ? (0u, inputMask)
+                : EstimateCarestreamWindow(frame, pixelCount, allocated, sampleShift, inputMask);
+
+            // Each RGB component is an unsigned 16-bit quantum value, not an 8-bit
+            // channel. Magick.NET-Q16 uses StorageType.Short for the quantum words.
             var rgb = new byte[checked(pixelCount * 6)];
             for (var i = 0; i < pixelCount; i++)
             {
@@ -758,9 +766,11 @@ public static class ReaKiller
                     ? (uint)frame[i]
                     : (uint)(frame[i * 2] | (frame[i * 2 + 1] << 8));
                 value = (value >> sampleShift) & inputMask;
+                var clipped = Math.Clamp(value, windowLow, windowHigh) - windowLow;
+                var scaled = (ushort)((clipped * 65535u + (windowHigh - windowLow) / 2u)
+                    / (windowHigh - windowLow));
                 if (photometric == "MONOCHROME1")
-                    value = inputMask - value;
-                var scaled = (ushort)(value * 65535u / inputMask);
+                    scaled = (ushort)(65535 - scaled);
                 var offset = i * 6;
                 for (var channel = 0; channel < 3; channel++)
                 {
@@ -782,6 +792,51 @@ public static class ReaKiller
                 throw;
             }
         }
+    }
+
+    private static (uint Low, uint High) EstimateCarestreamWindow(
+        byte[] frame, int pixelCount, ushort allocated, int sampleShift, uint inputMask)
+    {
+        // Histogram in the actual stored-bit range. Exclude zero-valued border/padding
+        // pixels because they must not dominate the exposure estimate.
+        var histogram = new int[checked((int)inputMask + 1)];
+        var nonzeroCount = 0;
+        for (var i = 0; i < pixelCount; i++)
+        {
+            var raw = allocated == 8
+                ? (uint)frame[i]
+                : (uint)(frame[2 * i] | (frame[2 * i + 1] << 8));
+            var sample = (raw >> sampleShift) & inputMask;
+            if (sample == 0) continue;
+            histogram[(int)sample]++;
+            nonzeroCount++;
+        }
+
+        // Too few usable pixels or a constant-value image: preserve the full range.
+        if (nonzeroCount < 100) return (0u, inputMask);
+        var lowRank = (int)Math.Ceiling(nonzeroCount * 0.05);
+        var highRank = (int)Math.Ceiling(nonzeroCount * 0.95);
+        uint low = 0, high = inputMask;
+        var cumulative = 0;
+        var foundLow = false;
+        for (var i = 1; i < histogram.Length; i++)
+        {
+            cumulative += histogram[i];
+            if (!foundLow && cumulative >= lowRank)
+            {
+                low = (uint)i;
+                foundLow = true;
+            }
+            if (cumulative >= highRank)
+            {
+                high = (uint)i;
+                break;
+            }
+        }
+        // Do not amplify sensor noise or divide by zero on nearly constant frames.
+        if (high <= low || high - low < Math.Max(16u, inputMask / 64u))
+            return (0u, inputMask);
+        return (low, high);
     }
 
     private static string ReadSignature(string path)
