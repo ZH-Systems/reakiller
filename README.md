@@ -167,6 +167,10 @@ The previously available **Choose files** picker remains available for individua
 
 Folder mode is implemented in the Windows desktop UI, not as a new command-line argument. Windows compilation and a live Ghostscript batch test remain outstanding.
 
+## In-place PDF compression
+
+In the desktop PDF Compression tab, enable **Replace original PDFs in place** to compress every selected PDF directly in its original location, retaining the original filename and folder. This uses a temporary PDF in the same folder; after Ghostscript succeeds and the PDF signature and size have been checked, the application replaces the original using `File.Replace` and a uniquely named rollback backup. Source filesystem creation, modified and accessed timestamps are restored. If **Keep smaller original when compression increases file size** is enabled, the source is left unchanged when the compressed result is not smaller. A confirmation dialog appears before starting. If failure occurs after the replacement, the backup is retained for manual recovery. In-place replacement cannot preserve every embedded PDF property, signature, form, or annotation; retain external backups for important records.
+
 ## Parallel PDF batch compression
 
 The PDF Compression tab now offers 1–4 independent Ghostscript workers, defaulting to 2. Multiple PDFs can be compressed concurrently; a single PDF is still processed by one Ghostscript instance and may not finish faster. More workers can reduce throughput on slow disks or when each PDF already saturates CPU or memory. The Stop button cancels the queue and terminates active Ghostscript processes, leaving previously completed PDFs in place. The original source PDF files remain intact.
