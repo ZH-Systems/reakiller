@@ -139,6 +139,15 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             .ToArray();
     }
 
+    private void InPlace_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DestinationPath is null || ChooseDestinationButton is null || DestinationLabel is null) return;
+        var inPlace = InPlace.IsChecked == true;
+        DestinationPath.IsEnabled = !inPlace;
+        ChooseDestinationButton.IsEnabled = !inPlace;
+        DestinationLabel.IsEnabled = !inPlace;
+    }
+
     private void ChooseDestination_Click(object sender, RoutedEventArgs e)
     {
         using var picker = new System.Windows.Forms.FolderBrowserDialog
@@ -157,7 +166,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
 
     private async Task<PdfJobResult> CompressOnePdfAsync(
         string source, string destination, string? sourceFolder,
-        string gs, string preset, bool skipLarger, CancellationToken cancellationToken)
+        string gs, string preset, bool skipLarger, bool inPlace, CancellationToken cancellationToken)
     {
         var displayName = sourceFolder is null
             ? Path.GetFileName(source)
@@ -165,6 +174,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
         string beforeText = "—";
         string afterText = "—";
         string? temp = null;
+        string? backup = null;
         Process? process = null;
         try
         {
@@ -179,11 +189,11 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             var relativeDirectory = sourceFolder is null
                 ? string.Empty
                 : Path.GetDirectoryName(Path.GetRelativePath(sourceFolder, source)) ?? string.Empty;
-            var outputDirectory = Path.Combine(destination, relativeDirectory);
-            var output = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(source) + "_compressed.pdf");
-            if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(output), StringComparison.OrdinalIgnoreCase))
+            var outputDirectory = inPlace ? Path.GetDirectoryName(source)! : Path.Combine(destination, relativeDirectory);
+            var output = inPlace ? source : Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(source) + "_compressed.pdf");
+            if (!inPlace && string.Equals(Path.GetFullPath(source), Path.GetFullPath(output), StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Input and output path cannot match.");
-            if (File.Exists(output))
+            if (!inPlace && File.Exists(output))
                 return new PdfJobResult(displayName, beforeText, afterText, "Skipped (exists)");
 
             Directory.CreateDirectory(outputDirectory);
@@ -246,13 +256,32 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             File.SetCreationTimeUtc(temp, sourceCreatedUtc);
             File.SetLastWriteTimeUtc(temp, sourceModifiedUtc);
             File.SetLastAccessTimeUtc(temp, sourceAccessedUtc);
-            File.Move(temp, output);
-            temp = null;
-            File.SetCreationTimeUtc(output, sourceCreatedUtc);
-            File.SetLastWriteTimeUtc(output, sourceModifiedUtc);
-            File.SetLastAccessTimeUtc(output, sourceAccessedUtc);
+            if (inPlace)
+            {
+                // Same-directory temp ensures File.Replace runs on the same volume.
+                // File.Replace preserves the original in a distinct rollback backup.
+                backup = source + ".reakiller-backup-" + Guid.NewGuid().ToString("N") + ".pdf";
+                cancellationToken.ThrowIfCancellationRequested();
+                File.Replace(temp, source, backup, ignoreMetadataErrors: false);
+                temp = null;
+                File.SetCreationTimeUtc(source, sourceCreatedUtc);
+                File.SetLastWriteTimeUtc(source, sourceModifiedUtc);
+                File.SetLastAccessTimeUtc(source, sourceAccessedUtc);
+                // Delete the backup only after the replacement and metadata restoration succeed.
+                File.Delete(backup);
+                backup = null;
+            }
+            else
+            {
+                File.Move(temp, output);
+                temp = null;
+                File.SetCreationTimeUtc(output, sourceCreatedUtc);
+                File.SetLastWriteTimeUtc(output, sourceModifiedUtc);
+                File.SetLastAccessTimeUtc(output, sourceAccessedUtc);
+            }
             afterText = Size(written);
-            return new PdfJobResult(displayName, beforeText, afterText, "Compressed");
+            return new PdfJobResult(displayName, beforeText, afterText,
+                inPlace ? "Replaced in place" : "Compressed");
         }
         catch (OperationCanceledException)
         {
@@ -260,7 +289,9 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
         }
         catch (Exception ex)
         {
-            return new PdfJobResult(displayName, beforeText, afterText, "Failed: " + ex.Message);
+            return new PdfJobResult(displayName, beforeText, afterText,
+                "Failed: " + ex.Message + (backup is not null && File.Exists(backup)
+                    ? " (original backup retained: " + backup + ")" : ""));
         }
         finally
         {
@@ -297,8 +328,9 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             MessageBox.Show("The selected source folder no longer exists.", "PDF compression");
             return;
         }
+        var inPlace = InPlace.IsChecked == true;
         var destination = DestinationPath.Text.Trim().Trim('"');
-        if (string.IsNullOrWhiteSpace(destination))
+        if (!inPlace && string.IsNullOrWhiteSpace(destination))
         {
             MessageBox.Show("Choose an output folder.", "PDF compression");
             return;
@@ -306,8 +338,8 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
         string[] files;
         try
         {
-            destination = Path.GetFullPath(destination);
-            if (_sourceFolder is not null &&
+            if (!inPlace) destination = Path.GetFullPath(destination);
+            if (!inPlace && _sourceFolder is not null &&
                 string.Equals(Path.TrimEndingDirectorySeparator(destination),
                     Path.TrimEndingDirectorySeparator(_sourceFolder), StringComparison.OrdinalIgnoreCase))
             {
@@ -316,15 +348,24 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             }
             files = _sourceFolder is null
                 ? _files.ToArray()
-                : DiscoverFolderPdfs(_sourceFolder, destination, RecursiveScan.IsChecked == true);
+                : DiscoverFolderPdfs(_sourceFolder, inPlace ? string.Empty : destination, RecursiveScan.IsChecked == true);
             if (files.Length == 0)
             {
                 MessageBox.Show("No PDF documents were found in the selected source.", "PDF compression");
                 return;
             }
-            Directory.CreateDirectory(destination);
+            if (!inPlace) Directory.CreateDirectory(destination);
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "PDF folder error"); return; }
+
+        if (inPlace && MessageBox.Show(
+                "In-place compression will replace each original PDF after successful compression. " +
+                "File dates are preserved, but the PDF content and embedded metadata can change. " +
+                "A temporary rollback copy is retained if replacement fails. " +
+                "Back up the source folder before proceeding. Continue?",
+                "Confirm in-place PDF replacement", MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
 
         // Separate Ghostscript processes provide document-level concurrency.
         // Keep the default at two workers to prevent excessive disk contention.
@@ -355,12 +396,12 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                     async (source, ct) =>
                     {
                         var result = await CompressOnePdfAsync(
-                            source, destination, sourceFolder, gs, preset, skipLarger, ct).ConfigureAwait(false);
+                            source, destination, sourceFolder, gs, preset, skipLarger, inPlace, ct).ConfigureAwait(false);
                         await Dispatcher.InvokeAsync(() =>
                         {
                             _results.Add(new PdfResult(result.Name, result.Before, result.After, result.Status));
                             processed++;
-                            if (result.Status == "Compressed") succeeded++;
+                            if (result.Status is "Compressed" or "Replaced in place") succeeded++;
                             else if (result.Status.StartsWith("Skipped", StringComparison.Ordinal)) skipped++;
                             else if (result.Status.StartsWith("Failed", StringComparison.Ordinal)) failed++;
                             Progress.Value = 100d * processed / files.Length;
