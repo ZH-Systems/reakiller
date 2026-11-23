@@ -18,11 +18,12 @@
      <Button Content="Choose entire folder" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="ChooseFolder_Click"/>
      <CheckBox x:Name="RecursiveScan" Content="Include PDFs in subfolders" IsChecked="True" Checked="RecursiveScan_Changed" Unchecked="RecursiveScan_Changed" Margin="0,12,0,0"/>
      <TextBlock x:Name="SelectedCount" Text="Select PDFs or an entire folder." Foreground="#6C7785" Margin="0,8,0,20" FontSize="12"/>
-     <TextBlock Text="Output folder" FontWeight="SemiBold" Foreground="#485465" Margin="0,0,0,7"/>
+     <CheckBox x:Name="InPlace" Content="Replace original PDFs in place" IsChecked="False" Checked="InPlace_Changed" Unchecked="InPlace_Changed" Margin="0,0,0,12" ToolTip="Compress each original PDF to a temporary file, validate it, then replace it safely while preserving timestamps."/>
+     <TextBlock x:Name="DestinationLabel" Text="Output folder" FontWeight="SemiBold" Foreground="#485465" Margin="0,0,0,7"/>
      <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <TextBox x:Name="DestinationPath" ToolTip="A different destination folder. Original PDF files are never overwritten."/>
-      <Button Grid.Column="1" Content="Browse" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="ChooseDestination_Click"/>
+      <TextBox x:Name="DestinationPath" ToolTip="Used only when in-place replacement is disabled."/>
+      <Button x:Name="ChooseDestinationButton" Grid.Column="1" Content="Browse" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="ChooseDestination_Click"/>
      </Grid>
      <TextBlock Text="Compression level" FontWeight="SemiBold" Foreground="#485465" Margin="0,22,0,7"/>
      <ComboBox x:Name="Preset" SelectedIndex="1" Padding="6">
@@ -48,7 +49,7 @@
       <Hyperlink NavigateUri="https://ghostscript.com/releases/gsdnld.html" RequestNavigate="GhostscriptLink_Click">Install Ghostscript for Windows</Hyperlink>
       (external dependency; licensing applies).
      </TextBlock>
-     <TextBlock Text="Files are written as *_compressed.pdf. Existing outputs are not overwritten." TextWrapping="Wrap" FontSize="11" Foreground="#6C7785" Margin="0,24,0,0"/>
+     <TextBlock Text="Output mode writes *_compressed.pdf. In-place mode replaces the source PDF only after successful compression and validation." TextWrapping="Wrap" FontSize="11" Foreground="#6C7785" Margin="0,24,0,0"/>
     </StackPanel>
    </ScrollViewer>
   </Border>
