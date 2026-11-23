@@ -32,7 +32,7 @@ jobs:
           Write-Host "Building ReaKiller $version"
           "REAKILLER_VERSION=$version" >> $env:GITHUB_ENV
           $wxs = Get-Content installer/ReaKiller.wxs -Raw
-          $wxs = [regex]::Replace($wxs, '(<Package[^>]*\\bVersion=")[^"]+(")', '${1}' + $version + '${2}')
+          $wxs = [regex]::Replace($wxs, '(<Package[^>]*Version=")[^"]+(")', '${1}' + $version + '${2}')
           Set-Content installer/ReaKiller.wxs $wxs
           if ($wxs -notmatch ('Version="' + [regex]::Escape($version) + '"')) { throw "MSI version not updated" }
       - name: Restore
