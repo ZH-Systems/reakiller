@@ -167,6 +167,12 @@ The previously available **Choose files** picker remains available for individua
 
 Folder mode is implemented in the Windows desktop UI, not as a new command-line argument. Windows compilation and a live Ghostscript batch test remain outstanding.
 
+## Parallel PDF batch compression
+
+The PDF Compression tab now offers 1–4 independent Ghostscript workers, defaulting to 2. Multiple PDFs can be compressed concurrently; a single PDF is still processed by one Ghostscript instance and may not finish faster. More workers can reduce throughput on slow disks or when each PDF already saturates CPU or memory. The Stop button cancels the queue and terminates active Ghostscript processes, leaving previously completed PDFs in place. The original source PDF files remain intact.
+
+Compressed PDFs preserve source filesystem creation, modification and access timestamps. Internal PDF metadata timestamps remain separate and are not preserved by this feature. Existing output PDFs are skipped and outputs that are not smaller are skipped when that option is enabled.
+
 ## Image output selection and in-place optimization
 
 The Image Conversion tab supports choosing **PNG (lossless)** or **JPEG (lossy)** output. The CLI equivalent is `--format png` or `--format jpg`. JPEG output currently uses encoder quality 90. Conversion into JPEG can reduce file sizes but changes image pixels and must not be mistaken for a lossless medical-image export.
