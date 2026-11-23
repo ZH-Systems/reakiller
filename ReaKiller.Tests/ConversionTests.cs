@@ -17,6 +17,28 @@ public sealed class ConversionTests
     }
 
     [Fact]
+    public void CarestreamWindowUsesNonzeroPercentilesRatherThanFullSensorRange()
+    {
+        // Synthetic 12-bit unsigned RVG values, left-aligned in 16-bit words.
+        // The zero border must not shift the estimated 5th/95th percentile.
+        var values = new ushort[1020];
+        for (var i = 0; i < 1000; i++)
+            values[i] = (ushort)((1800 + i * 2) << 4);
+        var bytes = new byte[values.Length * 2];
+        Buffer.BlockCopy(values, 0, bytes, 0, bytes.Length);
+
+        var method = typeof(ReaKiller).GetMethod(
+            "EstimateCarestreamWindow",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+        var result = (ValueTuple<uint, uint>)method!.Invoke(
+            null, [bytes, values.Length, (ushort)16, 4, 4095u])!;
+        Assert.InRange(result.Item1, 1890u, 1904u);
+        Assert.InRange(result.Item2, 3690u, 3704u);
+        Assert.True(result.Item2 > result.Item1);
+    }
+
+    [Fact]
     public async Task ExtensionFiltersApplyBeforeConversion()
     {
         var root = NewFolder();
