@@ -31,6 +31,14 @@
       <ComboBoxItem Content="Smallest files — reduced image quality" Tag="screen"/>
      </ComboBox>
      <TextBlock Text="Scanned PDFs often shrink more than text-based PDFs. Visual quality may change." Foreground="#6C7785" FontSize="12" TextWrapping="Wrap" Margin="0,9,0,14"/>
+     <TextBlock Text="Parallel PDF workers" FontWeight="SemiBold" Foreground="#485465" Margin="0,2,0,7"/>
+     <ComboBox x:Name="Workers" SelectedIndex="1" Padding="6" Margin="0,0,0,7">
+      <ComboBoxItem Content="1 worker — lower CPU and disk use" Tag="1"/>
+      <ComboBoxItem Content="2 workers — recommended" Tag="2"/>
+      <ComboBoxItem Content="3 workers — faster batches" Tag="3"/>
+      <ComboBoxItem Content="4 workers — high throughput" Tag="4"/>
+     </ComboBox>
+     <TextBlock Text="Runs independent PDFs concurrently. Use fewer workers for large PDFs or slower disks." Foreground="#6C7785" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,14"/>
      <CheckBox x:Name="SkipLarger" Content="Keep smaller original when compression increases file size" IsChecked="True" Margin="0,4,0,16" ToolTip="If the new PDF is not smaller, do not publish a larger copy."/>
      <Border Height="1" Background="#E4E8EE" Margin="0,4,0,18"/>
      <TextBlock Text="Compression engine" FontWeight="SemiBold" Foreground="#485465"/>

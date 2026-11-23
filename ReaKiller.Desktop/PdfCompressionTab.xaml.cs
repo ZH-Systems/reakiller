@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -15,7 +16,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private readonly List<string> _files = new();
     private string? _sourceFolder;
     private CancellationTokenSource? _stop;
-    private Process? _activeProcess;
+    private readonly ConcurrentDictionary<int, Process> _activeProcesses = new();
 
     public PdfCompressionTab()
     {
@@ -152,6 +153,131 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private static string Size(long bytes) => bytes < 1024 * 1024
         ? $"{bytes / 1024d:F1} KB" : $"{bytes / 1048576d:F2} MB";
 
+    private sealed record PdfJobResult(string Name, string Before, string After, string Status);
+
+    private async Task<PdfJobResult> CompressOnePdfAsync(
+        string source, string destination, string? sourceFolder,
+        string gs, string preset, bool skipLarger, CancellationToken cancellationToken)
+    {
+        var displayName = sourceFolder is null
+            ? Path.GetFileName(source)
+            : Path.GetRelativePath(sourceFolder, source);
+        string beforeText = "—";
+        string afterText = "—";
+        string? temp = null;
+        Process? process = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Snapshot the original metadata before Ghostscript reads the document.
+            var sourceCreatedUtc = File.GetCreationTimeUtc(source);
+            var sourceModifiedUtc = File.GetLastWriteTimeUtc(source);
+            var sourceAccessedUtc = File.GetLastAccessTimeUtc(source);
+            var before = new FileInfo(source).Length;
+            beforeText = Size(before);
+
+            var relativeDirectory = sourceFolder is null
+                ? string.Empty
+                : Path.GetDirectoryName(Path.GetRelativePath(sourceFolder, source)) ?? string.Empty;
+            var outputDirectory = Path.Combine(destination, relativeDirectory);
+            var output = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(source) + "_compressed.pdf");
+            if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(output), StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Input and output path cannot match.");
+            if (File.Exists(output))
+                return new PdfJobResult(displayName, beforeText, afterText, "Skipped (exists)");
+
+            Directory.CreateDirectory(outputDirectory);
+            temp = Path.Combine(outputDirectory, ".reakiller-" + Guid.NewGuid().ToString("N") + ".pdf");
+            var start = new ProcessStartInfo(gs)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
+            };
+            foreach (var arg in new[]
+            {
+                "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dQUIET", "-sDEVICE=pdfwrite",
+                "-dCompatibilityLevel=1.6", "-dDetectDuplicateImages=true",
+                "-dCompressFonts=true", "-dSubsetFonts=true",
+                "-dPDFSETTINGS=/" + preset, "-sOutputFile=" + temp, source
+            }) start.ArgumentList.Add(arg);
+
+            process = new Process { StartInfo = start };
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!process.Start()) throw new IOException("Unable to start Ghostscript.");
+            _activeProcesses[process.Id] = process;
+            // Drain redirected streams in parallel to avoid blocking on full pipe buffers.
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) { }
+                try { await process.WaitForExitAsync().ConfigureAwait(false); }
+                catch (InvalidOperationException) { }
+                throw;
+            }
+            var errors = await stderr.ConfigureAwait(false);
+            await stdout.ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (process.ExitCode != 0)
+                throw new IOException($"Ghostscript exit code {process.ExitCode}. {errors.Trim()}");
+
+            await using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (stream.Length < 8) throw new IOException("Generated PDF is empty.");
+                var header = new byte[5];
+                await stream.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
+                if (System.Text.Encoding.ASCII.GetString(header) != "%PDF-")
+                    throw new IOException("Output does not contain a PDF signature.");
+            }
+            var written = new FileInfo(temp).Length;
+            if (skipLarger && written >= before)
+                return new PdfJobResult(displayName, beforeText, afterText, "Skipped (not smaller)");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            // Set filesystem timestamps before publishing the output, then restore
+            // again at its final location for filesystem/provider consistency.
+            File.SetCreationTimeUtc(temp, sourceCreatedUtc);
+            File.SetLastWriteTimeUtc(temp, sourceModifiedUtc);
+            File.SetLastAccessTimeUtc(temp, sourceAccessedUtc);
+            File.Move(temp, output);
+            temp = null;
+            File.SetCreationTimeUtc(output, sourceCreatedUtc);
+            File.SetLastWriteTimeUtc(output, sourceModifiedUtc);
+            File.SetLastAccessTimeUtc(output, sourceAccessedUtc);
+            afterText = Size(written);
+            return new PdfJobResult(displayName, beforeText, afterText, "Compressed");
+        }
+        catch (OperationCanceledException)
+        {
+            return new PdfJobResult(displayName, beforeText, afterText, "Stopped");
+        }
+        catch (Exception ex)
+        {
+            return new PdfJobResult(displayName, beforeText, afterText, "Failed: " + ex.Message);
+        }
+        finally
+        {
+            if (process is not null)
+            {
+                try { _activeProcesses.TryRemove(process.Id, out _); }
+                catch (InvalidOperationException) { }
+                process.Dispose();
+            }
+            if (temp is not null)
+            {
+                try { if (File.Exists(temp)) File.Delete(temp); }
+                catch (IOException) { }
+            }
+        }
+    }
+
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (_stop is not null) return;
@@ -182,7 +308,8 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
         {
             destination = Path.GetFullPath(destination);
             if (_sourceFolder is not null &&
-                string.Equals(Path.TrimEndingDirectorySeparator(destination), Path.TrimEndingDirectorySeparator(_sourceFolder), StringComparison.OrdinalIgnoreCase))
+                string.Equals(Path.TrimEndingDirectorySeparator(destination),
+                    Path.TrimEndingDirectorySeparator(_sourceFolder), StringComparison.OrdinalIgnoreCase))
             {
                 MessageBox.Show("Choose a different output folder to avoid processing generated PDFs.", "PDF compression");
                 return;
@@ -198,109 +325,53 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             Directory.CreateDirectory(destination);
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "PDF folder error"); return; }
-        SelectedCount.Text = $"{files.Length:N0} PDFs queued";
+
+        // Separate Ghostscript processes provide document-level concurrency.
+        // Keep the default at two workers to prevent excessive disk contention.
+        var requestedWorkers = (Workers.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "2";
+        var workers = Math.Clamp(int.TryParse(requestedWorkers, out var value) ? value : 2, 1, 4);
+        var preset = ((ComboBoxItem)Preset.SelectedItem).Tag?.ToString() ?? "ebook";
+        var skipLarger = SkipLarger.IsChecked == true;
+        var sourceFolder = _sourceFolder;
         var tokenSource = new CancellationTokenSource();
         _stop = tokenSource;
         StartButton.IsEnabled = false;
         StopButton.IsEnabled = true;
         _results.Clear();
         Progress.Value = 0;
+        SelectedCount.Text = $"{files.Length:N0} PDFs queued";
+
         int processed = 0, succeeded = 0, skipped = 0, failed = 0;
         try
         {
-            var preset = ((ComboBoxItem)Preset.SelectedItem).Tag?.ToString() ?? "ebook";
-            foreach (var source in files)
+            try
             {
-                if (tokenSource.IsCancellationRequested) break;
-                var before = new FileInfo(source).Length;
-                var relativeDirectory = _sourceFolder is null
-                    ? string.Empty
-                    : Path.GetDirectoryName(Path.GetRelativePath(_sourceFolder, source)) ?? string.Empty;
-                var outputDirectory = Path.Combine(destination, relativeDirectory);
-                var output = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(source) + "_compressed.pdf");
-                ProgressText.Text = $"{processed} / {files.Length}";
-                SummaryText.Text = "Processing: " + Path.GetFileName(source);
-                var temp = Path.Combine(outputDirectory, ".reakiller-" + Guid.NewGuid().ToString("N") + ".pdf");
-                string status;
-                string after = "—";
-                try
-                {
-                    if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(output), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("Input and output path cannot match.");
-                    if (File.Exists(output))
+                await Parallel.ForEachAsync(files,
+                    new ParallelOptions
                     {
-                        status = "Skipped (exists)";
-                        skipped++;
-                    }
-                    else
+                        MaxDegreeOfParallelism = workers,
+                        CancellationToken = tokenSource.Token
+                    },
+                    async (source, ct) =>
                     {
-                        Directory.CreateDirectory(outputDirectory);
-                        var start = new ProcessStartInfo(gs)
+                        var result = await CompressOnePdfAsync(
+                            source, destination, sourceFolder, gs, preset, skipLarger, ct).ConfigureAwait(false);
+                        await Dispatcher.InvokeAsync(() =>
                         {
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            RedirectStandardError = true,
-                            RedirectStandardOutput = true
-                        };
-                        foreach (var arg in new[]
-                        {
-                            "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=pdfwrite",
-                            "-dCompatibilityLevel=1.6", "-dDetectDuplicateImages=true",
-                            "-dCompressFonts=true", "-dSubsetFonts=true",
-                            "-dPDFSETTINGS=/" + preset, "-sOutputFile=" + temp, source
-                        }) start.ArgumentList.Add(arg);
-                        using var process = new Process { StartInfo = start };
-                        _activeProcess = process;
-                        process.Start();
-                        var stdout = process.StandardOutput.ReadToEndAsync();
-                        var stderr = process.StandardError.ReadToEndAsync();
-                        await process.WaitForExitAsync(tokenSource.Token);
-                        var errors = await stderr;
-                        await stdout;
-                        if (process.ExitCode != 0)
-                            throw new IOException($"Ghostscript exit code {process.ExitCode}. {errors.Trim()}");
-                        await using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read))
-                        {
-                            if (stream.Length < 8) throw new IOException("Generated PDF is empty.");
-                            var header = new byte[5];
-                            await stream.ReadExactlyAsync(header);
-                            if (System.Text.Encoding.ASCII.GetString(header) != "%PDF-")
-                                throw new IOException("Output does not contain a PDF signature.");
-                        }
-                        var written = new FileInfo(temp).Length;
-                        if (SkipLarger.IsChecked == true && written >= before)
-                        {
-                            status = "Skipped (not smaller)";
-                            skipped++;
-                        }
-                        else
-                        {
-                            File.Move(temp, output);
-                            status = "Compressed";
-                            after = Size(written);
-                            succeeded++;
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    status = "Stopped";
-                    tokenSource.Cancel();
-                }
-                catch (Exception ex)
-                {
-                    status = "Failed: " + ex.Message;
-                    failed++;
-                }
-                finally
-                {
-                    _activeProcess = null;
-                    try { if (File.Exists(temp)) File.Delete(temp); } catch (IOException) { }
-                }
-                var displayName = _sourceFolder is null ? Path.GetFileName(source) : Path.GetRelativePath(_sourceFolder, source);
-                _results.Add(new PdfResult(displayName, Size(before), after, status));
-                processed++;
-                Progress.Value = 100d * processed / files.Length;
+                            _results.Add(new PdfResult(result.Name, result.Before, result.After, result.Status));
+                            processed++;
+                            if (result.Status == "Compressed") succeeded++;
+                            else if (result.Status.StartsWith("Skipped", StringComparison.Ordinal)) skipped++;
+                            else if (result.Status.StartsWith("Failed", StringComparison.Ordinal)) failed++;
+                            Progress.Value = 100d * processed / files.Length;
+                            ProgressText.Text = $"{processed} / {files.Length}";
+                            SummaryText.Text = $"Compressed: {succeeded} · Skipped: {skipped} · Failed: {failed} · Workers: {workers}";
+                        });
+                    });
+            }
+            catch (OperationCanceledException)
+            {
+                // Completed files remain committed, incomplete .pdf temporaries are removed.
             }
             ProgressText.Text = $"{processed} / {files.Length}";
             SummaryText.Text = $"Compressed: {succeeded} · Skipped: {skipped} · Failed: {failed}" +
@@ -318,8 +389,11 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
         _stop?.Cancel();
-        try { if (_activeProcess is { HasExited: false }) _activeProcess.Kill(entireProcessTree: true); }
-        catch (InvalidOperationException) { }
+        foreach (var process in _activeProcesses.Values)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+        }
         StopButton.IsEnabled = false;
     }
 }
