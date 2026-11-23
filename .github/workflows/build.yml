@@ -18,20 +18,23 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Resolve unified application and MSI version
         shell: pwsh
         run: |
-          $version = $env:GITHUB_REF_NAME.Substring(1)
-          if ($version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw "Invalid tag" }
-          foreach ($path in @("ReaKiller/ReaKiller.csproj", "ReaKiller.Desktop/ReaKiller.Desktop.csproj", "ReaKiller.Updater/ReaKiller.Updater.csproj")) {
-            $contents = Get-Content $path -Raw
-            $contents = [regex]::Replace($contents, '<Version>[^<]+</Version>', "<Version>$version</Version>")
-            Set-Content $path $contents
+          [xml]$props = Get-Content Directory.Build.props -Raw
+          $version = $props.Project.PropertyGroup.Version
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF_NAME.Substring(1)
           }
+          if ($version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw "Invalid semantic release version: $version" }
+          $props.Project.PropertyGroup.Version = $version
+          $props.Save((Join-Path $PWD 'Directory.Build.props'))
+          Write-Host "Building ReaKiller $version"
+          "REAKILLER_VERSION=$version" >> $env:GITHUB_ENV
           $wxs = Get-Content installer/ReaKiller.wxs -Raw
-          $wxs = $wxs.Replace('Version="1.0.0"', ('Version="' + $version + '"'))
+          $wxs = [regex]::Replace($wxs, '(<Package[^>]*\\bVersion=")[^"]+(")', '${1}' + $version + '${2}')
           Set-Content installer/ReaKiller.wxs $wxs
+          if ($wxs -notmatch ('Version="' + [regex]::Escape($version) + '"')) { throw "MSI version not updated" }
       - name: Restore
         run: dotnet restore ReaKiller/ReaKiller.csproj
       - name: Build
@@ -89,6 +92,23 @@ jobs:
           ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
           wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
           if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
+      - name: Verify MSI and executable versions
+        shell: pwsh
+        run: |
+          $expected = $env:REAKILLER_VERSION
+          $exe = (Get-Item bundle/ReaKiller.Desktop.exe).VersionInfo.ProductVersion
+          Write-Host "Desktop product version: $exe, Expected: $expected"
+          if ($exe -notlike "$expected*") { throw "Desktop version does not match MSI version" }
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $database = $installer.OpenDatabase((Resolve-Path installers/ReaKiller-win-x64.msi).Path, 0)
+          $view = $database.OpenView("SELECT Value FROM Property WHERE Property = 'ProductVersion'")
+          $view.Execute()
+          $record = $view.Fetch()
+          if ($null -eq $record) { throw "MSI ProductVersion missing" }
+          $actual = $record.StringData(1)
+          $view.Close()
+          Write-Host "MSI ProductVersion: $actual"
+          if ($actual -ne $expected) { throw "MSI version $actual does not match $expected" }
       - name: Sign release MSI
         if: startsWith(github.ref, 'refs/tags/v') && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
         uses: azure/artifact-signing-action@v2
