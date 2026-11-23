@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Update this when publishing a release; tag builds override it from vX.Y.Z. -->
+    <Version>1.0.1</Version>
+  </PropertyGroup>
+</Project>

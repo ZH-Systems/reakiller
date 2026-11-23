@@ -28,12 +28,15 @@ internal static class UpdateService
     public static async Task<AvailableUpdate?> CheckAsync()
     {
         using var response = await Client.GetAsync(Latest);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            throw new InvalidOperationException(
+                "No published GitHub Release was found. GitHub Actions artifacts are not update releases; publish a signed vX.Y.Z GitHub Release first.");
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = doc.RootElement;
         var tag = root.GetProperty("tag_name").GetString()?.TrimStart('v', 'V') ?? "";
-        if (!Version.TryParse(tag, out var latest)) return null;
+        if (!Version.TryParse(tag, out var latest))
+            throw new InvalidDataException("The latest GitHub Release tag is not a valid version (expected vX.Y.Z).");
         var current = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(1, 0, 0);
         if (latest <= current) return null;
         string? msi = null, hash = null;
@@ -44,8 +47,10 @@ internal static class UpdateService
             if (name == "ReaKiller-win-x64.msi") msi = url;
             if (name == "ReaKiller-win-x64.msi.sha256") hash = url;
         }
-        return msi is null || hash is null ? null :
-            new AvailableUpdate(latest, root.GetProperty("body").GetString() ?? "", msi, hash);
+        if (msi is null || hash is null)
+            throw new InvalidDataException(
+                "Latest GitHub Release is missing ReaKiller-win-x64.msi or its .sha256 checksum. Publish the signed release assets.");
+        return new AvailableUpdate(latest, root.GetProperty("body").GetString() ?? "", msi, hash);
     }
 
     public static async Task DownloadAndLaunchAsync(AvailableUpdate update)

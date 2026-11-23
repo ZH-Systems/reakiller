@@ -1,3 +1,9 @@
+## Automatic signed MSI releases
+
+Every successful push or merge to `main` triggers the Windows CI pipeline. It reads existing `vMAJOR.MINOR.PATCH` tags and automatically selects the next patch release (starting at the version floor in `Directory.Build.props`, currently `1.0.1`). The same version is embedded into the desktop, CLI, updater, and WiX MSI. After tests, signing, and MSI-version checks succeed, CI publishes a GitHub Release with a matching tag, signed `ReaKiller-win-x64.msi`, and `ReaKiller-win-x64.msi.sha256`. No manual tagging or `gh release` commands are required. Pull requests only build and test, never publish releases.
+
+One-time prerequisite: GitHub Actions must have `ZH_ARTIFACT_SIGNING_ENABLED=true`, the Azure Artifact Signing variables, and `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` secrets configured. The pipeline deliberately fails release creation rather than distributing unsigned updates. Ensure the repository Actions token is permitted to write repository contents/releases. The updater discovers only published GitHub Releases, not CI artifacts. For future major/minor transitions, raise the minimum `Version` in `Directory.Build.props`; subsequent main pushes increment its patch value.
+
 # ReaKiller
 
 Personal Windows command-line image converter for IMG, DICOM, JPEG, and TIFF to PNG.

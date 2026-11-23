@@ -3,35 +3,65 @@ name: Windows build
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
 
 permissions:
   contents: write
   id-token: write
 
+concurrency:
+  group: reakiller-main-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Resolve next release version
         shell: pwsh
         run: |
-          $version = $env:GITHUB_REF_NAME.Substring(1)
-          if ($version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw "Invalid tag" }
-          foreach ($path in @("ReaKiller/ReaKiller.csproj", "ReaKiller.Desktop/ReaKiller.Desktop.csproj", "ReaKiller.Updater/ReaKiller.Updater.csproj")) {
-            $contents = Get-Content $path -Raw
-            $contents = [regex]::Replace($contents, '<Version>[^<]+</Version>', "<Version>$version</Version>")
-            Set-Content $path $contents
+          [xml]$props = Get-Content Directory.Build.props -Raw
+          $minimum = [version]$props.Project.PropertyGroup.Version
+          $version = $minimum.ToString(3)
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -eq 'refs/heads/main') {
+            git fetch origin --tags --force
+            if ($LASTEXITCODE -ne 0) { throw "Unable to fetch release tags" }
+            $latest = $null
+            foreach ($tag in (git tag --list 'v*')) {
+              if ($tag -match '^v([0-9]+)\.([0-9]+)\.([0-9]+)$') {
+                $candidate = [version](($Matches[1], $Matches[2], $Matches[3]) -join '.')
+                if ($null -eq $latest -or $candidate -gt $latest) { $latest = $candidate }
+              }
+            }
+            if ($null -ne $latest -and $latest -ge $minimum) {
+              $version = "$($latest.Major).$($latest.Minor).$($latest.Build + 1)"
+            }
           }
+          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "Invalid version: $version" }
+          $props.Project.PropertyGroup.Version = $version
+          $props.Save((Join-Path $PWD 'Directory.Build.props'))
+          "REAKILLER_VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Building ReaKiller $version"
           $wxs = Get-Content installer/ReaKiller.wxs -Raw
-          $wxs = $wxs.Replace('Version="1.0.0"', ('Version="' + $version + '"'))
+          $wxs = [regex]::Replace($wxs, '(<Package[^>]*Version=")[^"]+(")', '${1}' + $version + '${2}')
           Set-Content installer/ReaKiller.wxs $wxs
+          if ($wxs -notmatch ('Version="' + [regex]::Escape($version) + '"')) { throw "MSI version not updated" }
+      - name: Require release signing for main builds
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          SIGNING_ENABLED: ${{ vars.ZH_ARTIFACT_SIGNING_ENABLED }}
+        run: |
+          if ($env:SIGNING_ENABLED -ne 'true') {
+            throw "Automatic signed releases require ZH_ARTIFACT_SIGNING_ENABLED=true and Azure Artifact Signing configuration."
+          }
       - name: Restore
         run: dotnet restore ReaKiller/ReaKiller.csproj
       - name: Build
@@ -54,14 +84,14 @@ jobs:
           Copy-Item publish/* bundle/ -Recurse -Force
           Copy-Item updater/* bundle/ -Recurse -Force
       - name: Azure signing login
-        if: github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Sign executables
-        if: github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.ZH_ARTIFACT_SIGNING_ENDPOINT }}
@@ -73,7 +103,7 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
       - name: Verify executable signatures
-        if: github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
         shell: pwsh
         run: |
           foreach ($name in @("ReaKiller.exe", "ReaKiller.Desktop.exe", "ReaKiller.Updater.exe")) {
@@ -89,8 +119,25 @@ jobs:
           ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
           wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
           if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
+      - name: Verify MSI and executable versions
+        shell: pwsh
+        run: |
+          $expected = $env:REAKILLER_VERSION
+          $exe = (Get-Item bundle/ReaKiller.Desktop.exe).VersionInfo.ProductVersion
+          Write-Host "Desktop product version: $exe, Expected: $expected"
+          if ($exe -notlike "$expected*") { throw "Desktop version does not match MSI version" }
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $database = $installer.OpenDatabase((Resolve-Path installers/ReaKiller-win-x64.msi).Path, 0)
+          $view = $database.OpenView("SELECT Value FROM Property WHERE Property = 'ProductVersion'")
+          $view.Execute()
+          $record = $view.Fetch()
+          if ($null -eq $record) { throw "MSI ProductVersion missing" }
+          $actual = $record.StringData(1)
+          $view.Close()
+          Write-Host "MSI ProductVersion: $actual"
+          if ($actual -ne $expected) { throw "MSI version $actual does not match $expected" }
       - name: Sign release MSI
-        if: startsWith(github.ref, 'refs/tags/v') && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.ZH_ARTIFACT_SIGNING_ENDPOINT }}
@@ -102,7 +149,7 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
       - name: Prepare release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           if ("${{ vars.ZH_ARTIFACT_SIGNING_ENABLED }}" -ne "true") { throw "Signing required for auto updates" }
@@ -111,11 +158,14 @@ jobs:
           $hash = (Get-FileHash installers/ReaKiller-win-x64.msi -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content installers/ReaKiller-win-x64.msi.sha256 "$hash  ReaKiller-win-x64.msi"
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release create $env:GITHUB_REF_NAME installers/ReaKiller-win-x64.msi installers/ReaKiller-win-x64.msi.sha256 --generate-notes
+        run: |
+          $tag = "v$env:REAKILLER_VERSION"
+          gh release create $tag installers/ReaKiller-win-x64.msi installers/ReaKiller-win-x64.msi.sha256 --target $env:GITHUB_SHA --title "ReaKiller $tag" --generate-notes --latest
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release publication failed for $tag" }
       - uses: actions/upload-artifact@v4
         with:
           name: ReaKiller-MSI-win-x64
