@@ -212,6 +212,11 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             foreach (var source in files)
             {
                 if (tokenSource.IsCancellationRequested) break;
+                // Capture original filesystem metadata before Ghostscript opens the PDF.
+                // Reading source content can update LastAccessTimeUtc on some filesystems.
+                var sourceCreatedUtc = File.GetCreationTimeUtc(source);
+                var sourceModifiedUtc = File.GetLastWriteTimeUtc(source);
+                var sourceAccessedUtc = File.GetLastAccessTimeUtc(source);
                 var before = new FileInfo(source).Length;
                 var relativeDirectory = _sourceFolder is null
                     ? string.Empty
@@ -275,7 +280,16 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                         }
                         else
                         {
+                            // Set timestamps on the validated temporary file before publishing.
+                            // File.Move on the same volume retains the source file metadata.
+                            File.SetCreationTimeUtc(temp, sourceCreatedUtc);
+                            File.SetLastWriteTimeUtc(temp, sourceModifiedUtc);
+                            File.SetLastAccessTimeUtc(temp, sourceAccessedUtc);
                             File.Move(temp, output);
+                            // Also restore at the final location for filesystem/provider behavior.
+                            File.SetCreationTimeUtc(output, sourceCreatedUtc);
+                            File.SetLastWriteTimeUtc(output, sourceModifiedUtc);
+                            File.SetLastAccessTimeUtc(output, sourceAccessedUtc);
                             status = "Compressed";
                             after = Size(written);
                             succeeded++;
