@@ -1,0 +1,66 @@
+<UserControl x:Class="ReaKiller.Desktop.DataConversionTab"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop">
+ <Grid Margin="24">
+  <Grid.ColumnDefinitions><ColumnDefinition Width="390"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+  <Border Background="White" CornerRadius="8" Padding="20" BorderBrush="#DFE4EC" BorderThickness="1">
+   <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel x:Name="SettingsPanel">
+     <TextBlock Text="Data conversion" FontSize="23" FontWeight="SemiBold"/>
+     <TextBlock Text="Extract structured data locally. Originals are preserved." TextWrapping="Wrap" Foreground="#485465" Margin="0,8,0,18"/>
+     <TextBlock Text="Operation" FontWeight="SemiBold"/>
+     <ComboBox x:Name="Mode" SelectedIndex="0" SelectionChanged="ModeChanged" Margin="0,6,0,16">
+      <ComboBoxItem Content="XML to CSV"/><ComboBoxItem Content="PDF to CSV"/>
+     </ComboBox>
+     <TextBlock Text="Source file or folder" FontWeight="SemiBold"/>
+     <TextBox x:Name="Source" Margin="0,6,0,8" AutomationProperties.Name="Source file or folder"/>
+     <WrapPanel><Button Content="Choose file" Click="ChooseFile" Margin="0,0,8,0"/><Button Content="Choose folder" Click="ChooseFolder"/></WrapPanel>
+     <TextBlock Text="Or drop one file or folder here" Foreground="#485465" Margin="0,6,0,12"/>
+     <CheckBox x:Name="Recursive" Content="Include subfolders" IsChecked="True" Margin="0,0,0,16"/>
+     <TextBlock Text="Output folder" FontWeight="SemiBold"/>
+     <DockPanel Margin="0,6,0,16"><Button DockPanel.Dock="Right" Content="Browse" Click="ChooseOutput" Margin="8,0,0,0"/><TextBox x:Name="Destination" AutomationProperties.Name="Output folder"/></DockPanel>
+     <CheckBox x:Name="Overwrite" Content="Overwrite existing CSV files" Margin="0,0,0,16"/>
+     <StackPanel x:Name="XmlSettings">
+      <TextBlock Text="Record path (optional)" FontWeight="SemiBold"/>
+      <TextBox x:Name="RecordPath" Margin="0,6,0,12" ToolTip="Example: Patients/Patient"/>
+      <TextBlock Text="Columns, one per line (optional)" FontWeight="SemiBold"/>
+      <TextBox x:Name="XmlColumns" AcceptsReturn="True" Height="75" Margin="0,6,0,12" VerticalScrollBarVisibility="Auto"/>
+     </StackPanel>
+     <StackPanel x:Name="PdfSettings" Visibility="Collapsed">
+      <TextBlock Text="Page range (optional)" FontWeight="SemiBold"/>
+      <UniformGrid Columns="2" Margin="0,6,0,12"><TextBox x:Name="FirstPage" Text="1" Margin="0,0,6,0" AutomationProperties.Name="First page"/><TextBox x:Name="LastPage" AutomationProperties.Name="Last page"/></UniformGrid>
+      <TextBlock Text="Column boundaries in PDF points" FontWeight="SemiBold"/>
+      <TextBox x:Name="Boundaries" Margin="0,6,0,12" ToolTip="Example: 150,300"/>
+      <TextBlock Text="Header names, one per line (optional)" FontWeight="SemiBold"/>
+      <TextBox x:Name="PdfHeaders" AcceptsReturn="True" Height="65" Margin="0,6,0,12"/>
+      <CheckBox x:Name="KeepHeaders" Content="Keep repeated page headers" Margin="0,0,0,12"/>
+      <TextBlock Text="Trusted OCR configuration (optional)" FontWeight="SemiBold"/>
+      <DockPanel Margin="0,6,0,12"><Button DockPanel.Dock="Right" Content="Browse" Click="ChooseOcr" Margin="8,0,0,0"/><TextBox x:Name="OcrConfig" IsReadOnly="True"/></DockPanel>
+      <Button Content="Clear OCR configuration" Click="ClearOcr" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+      <TextBlock Text="OCR is experimental. Use only a reviewed configuration and approved local binaries." Foreground="#805020" TextWrapping="Wrap"/>
+     </StackPanel>
+     <TextBlock Text="Workers" FontWeight="SemiBold" Margin="0,12,0,0"/>
+     <TextBox x:Name="Workers" Text="1" Margin="0,6,0,12" AutomationProperties.Name="Worker count"/>
+    </StackPanel>
+   </ScrollViewer>
+  </Border>
+  <Grid Grid.Column="2">
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <TextBlock Text="Conversion workspace" FontSize="23" FontWeight="SemiBold"/>
+   <StackPanel Grid.Row="1" Margin="0,12,0,12">
+    <TextBlock x:Name="Status" Text="Ready" TextWrapping="Wrap"/>
+    <ProgressBar x:Name="Activity" Height="8" Margin="0,8,0,0"/>
+   </StackPanel>
+   <TabControl Grid.Row="2">
+    <TabItem Header="Preview"><DataGrid x:Name="PreviewGrid" IsReadOnly="True" AutoGenerateColumns="True" CanUserAddRows="False" EnableRowVirtualization="True"/></TabItem>
+    <TabItem Header="Activity"><TextBox x:Name="Log" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></TabItem>
+   </TabControl>
+   <WrapPanel Grid.Row="3" Margin="0,16,0,0">
+    <Button x:Name="PreviewButton" Content="Preview PDF" Click="PreviewClick" Margin="0,0,8,0" IsEnabled="False"/>
+    <Button x:Name="RunButton" Content="Start conversion" Click="RunClick" Margin="0,0,8,0"/>
+    <Button x:Name="StopButton" Content="Stop" Click="StopClick" IsEnabled="False"/>
+   </WrapPanel>
+  </Grid>
+ </Grid>
+</UserControl>

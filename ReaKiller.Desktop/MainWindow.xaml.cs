@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Closing += (_, e) => { if (DataWorkspace.IsBusy) { DataWorkspace.Cancel(); e.Cancel = true; } };
         ResultsList.ItemsSource = _fileResults;
         Loaded += async (_, _) => await CheckUpdatesAsync(false);
         Closed += (_, _) =>
@@ -49,7 +50,7 @@ public partial class MainWindow : Window
 
     private async Task CheckUpdatesAsync(bool manual)
     {
-        if (_running)
+        if (_running || DataWorkspace.IsBusy)
         {
             if (manual) MessageBox.Show("Finish or stop the current conversion before updating.", "Transflux updates");
             return;
@@ -594,14 +595,14 @@ public partial class MainWindow : Window
 
     private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        e.Effects = !_running && e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
+        e.Effects = FeatureTabs.SelectedIndex == 0 && !_running && e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
             ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
-        e.Handled = true;
+        e.Handled = FeatureTabs.SelectedIndex == 0;
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        if (_running || !e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
+        if (FeatureTabs.SelectedIndex != 0 || _running || !e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
         if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths && paths.Length > 0)
         {
             if (SingleFileMode.IsChecked == true)
