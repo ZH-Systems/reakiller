@@ -4,7 +4,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using Transflux.Core;
 
-internal sealed class IsolatedPdfConverter(PdfCsvOptions options) : IFileConverter
+internal sealed class IsolatedPdfConverter(PdfCsvOptions options, OcrConfiguration? ocr = null) : IFileConverter
 {
     public ConversionOperation Operation => ConversionOperation.PdfToCsv;
     public IReadOnlyCollection<string> SourceExtensions => new[] { ".pdf" };
@@ -43,7 +43,7 @@ internal sealed class IsolatedPdfConverter(PdfCsvOptions options) : IFileConvert
         if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
             start.ArgumentList.Add(typeof(IsolatedPdfConverter).Assembly.Location);
         foreach (var argument in new[] { "--internal-pdf-worker", source, output,
-            preview ? "preview" : "convert", JsonSerializer.Serialize(options) })
+            preview ? "preview" : "convert", JsonSerializer.Serialize(options), JsonSerializer.Serialize(ocr) })
             start.ArgumentList.Add(argument);
         start.Environment["DOTNET_GCHeapHardLimit"] = "0x20000000";
         using var process = Process.Start(start) ?? throw new IOException("Unable to start PDF worker.");
@@ -85,7 +85,7 @@ internal sealed class IsolatedPdfConverter(PdfCsvOptions options) : IFileConvert
     {
         try
         {
-            if (args.Length != 5 || (args[3] != "preview" && args[3] != "convert")) return 2;
+            if (args.Length != 6 || (args[3] != "preview" && args[3] != "convert")) return 2;
             if (OperatingSystem.IsWindows())
             {
                 using var identity = WindowsIdentity.GetCurrent();
@@ -96,7 +96,9 @@ internal sealed class IsolatedPdfConverter(PdfCsvOptions options) : IFileConvert
             if (string.Equals(source, output, StringComparison.OrdinalIgnoreCase) || File.Exists(output)
                 || new FileInfo(source).Length > MaxInputBytes) return 2;
             var settings = JsonSerializer.Deserialize<PdfCsvOptions>(args[4]) ?? throw new InvalidDataException();
-            var converter = new PdfCsvConverter(settings);
+            var config = JsonSerializer.Deserialize<OcrConfiguration>(args[5]);
+            var tools = config is null ? null : new OcrTools(config);
+            var converter = new PdfCsvConverter(settings, tools is null ? null : tools.ReadPage);
             if (args[3] == "preview")
             {
                 var json = JsonSerializer.Serialize(converter.Preview(source));
