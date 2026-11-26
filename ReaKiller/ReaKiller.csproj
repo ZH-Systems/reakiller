@@ -13,7 +13,7 @@
     <PublishAot>false</PublishAot>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.2" />
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="15.1.1" />
     <PackageReference Include="fo-dicom" Version="5.2.6" />
     <PackageReference Include="fo-dicom.Codecs" Version="5.16.7" />
   </ItemGroup>
