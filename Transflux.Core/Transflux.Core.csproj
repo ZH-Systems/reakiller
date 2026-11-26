@@ -5,6 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="PdfPig" Version="[0.1.17-alpha-202611230028-4a6b5]" />
   </ItemGroup>
 </Project>
