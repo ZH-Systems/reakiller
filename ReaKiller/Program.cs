@@ -137,7 +137,7 @@ public static class ReaKiller
         }
 
         if (!options.DryRun) Directory.CreateDirectory(destination);
-        Console.WriteLine($"ReaKiller: {inputFiles.Length} input file(s), {options.Threads} worker(s).");
+        Console.WriteLine($"Transflux: {inputFiles.Length} input file(s), {options.Threads} worker(s).");
         if (options.InPlace) Console.WriteLine("IN-PLACE MODE: originals will be deleted ONLY after successful PNG conversion and verification.");
         using var limiter = options.AdaptiveWorkers ? new AdaptiveWorkerLimiter(options.Threads) : null;
         var results = new ConcurrentBag<Result>();
@@ -397,7 +397,7 @@ public static class ReaKiller
                         if (handles > 0)
                         {
                             var growth = handles - Interlocked.Exchange(ref lastHandleCount, handles);
-                            Console.Error.WriteLine($"ReaKiller resources after {done} files: {handles} process handles (delta {growth:+#;-#;0}).");
+                            Console.Error.WriteLine($"Transflux resources after {done} files: {handles} process handles (delta {growth:+#;-#;0}).");
                         }
                         // Encourage timely finalization of any abandoned native wrappers
                         // during very long batches. This cannot correct a true native leak.
@@ -629,7 +629,7 @@ public static class ReaKiller
     private static async Task<int> RunInteractiveAsync()
     {
         Console.WriteLine("========================================");
-        Console.WriteLine("       ReaKiller PNG Converter");
+        Console.WriteLine("       Transflux Image Converter");
         Console.WriteLine("========================================");
         Console.WriteLine("Supported: IMG, DCM, DICOM, JPG, JPEG, TIF, TIFF");
         Console.WriteLine();
@@ -1008,7 +1008,7 @@ public static class ReaKiller
     private static void PrintUsage()
     {
         Console.WriteLine("""
-            ReaKiller: IMG, DICOM, JPEG, TIFF to PNG.
+            Transflux: IMG, DICOM, JPEG, TIFF to PNG.
             Usage:
               ReaKiller.exe convert <file-or-directory> --output <directory> [options]
             Options:\n              --include-ext bmp,tif   Only convert these source extensions\n              --exclude-ext jpg,png   Skip these source extensions
