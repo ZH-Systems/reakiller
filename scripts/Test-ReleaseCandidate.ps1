@@ -11,7 +11,7 @@ try {
     $expected = @{
         ProductName = 'Transflux'
         Manufacturer = 'ZH Systems'
-        UpgradeCode = '{5D7C9311-54B1-4E3E-8398-1E7637097B25}'
+        UpgradeCode = '{F862E9A4-AD7C-4ED3-9462-60D44B19B85E}'
     }
     foreach ($key in $expected.Keys) {
         $query = 'SELECT `Value` FROM `Property` WHERE `Property` = ''{0}''' -f $key

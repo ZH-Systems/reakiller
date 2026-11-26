@@ -1,3 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><Company>ZH-Systems</Company><Product>Transflux</Product><Version>1.0.0</Version></PropertyGroup>
+<PropertyGroup><ApplicationIcon>../assets/Transflux.ico</ApplicationIcon></PropertyGroup>
+<Target Name="GenerateTransfluxIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
+  <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../scripts/Generate-Icon.ps1&quot;" />
+</Target>
 </Project>

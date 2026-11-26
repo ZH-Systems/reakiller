@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $subject = "CN=ZH-Systems"
 $bundle = (Resolve-Path $BundlePath).Path
-$names = @("ReaKiller.exe", "ReaKiller.Desktop.exe")
+$names = @("Transflux.exe", "Transflux.Desktop.exe")
 foreach ($name in $names) {
     if (-not (Test-Path (Join-Path $bundle $name) -PathType Leaf)) {
         throw "Missing $name in $bundle. Download and extract the full desktop artifact first."
