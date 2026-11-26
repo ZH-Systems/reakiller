@@ -1,3 +1,3 @@
 using System.Windows;
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 public partial class App : System.Windows.Application { }

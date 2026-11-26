@@ -9,7 +9,7 @@ using System.Windows;
 using System.Windows.Controls;
 using MessageBox = System.Windows.MessageBox;
 
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 
 public partial class MainWindow : Window
 {
@@ -57,7 +57,7 @@ public partial class MainWindow : Window
             return;
         }
         // Do not offer MSI upgrades to portable installations.
-        using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ZH Systems\ReaKiller");
+        using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ZH Systems\Transflux");
         if (key?.GetValue("Installed") is null)
         {
             if (manual) MessageBox.Show("Automatic updates require the MSI-installed edition. Download portable releases from GitHub.", "Transflux updates");
@@ -244,11 +244,11 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(text)) return;
         Dispatcher.Invoke(() =>
         {
-            if (text.StartsWith("REAKILLER_BATCH_RESULT:", StringComparison.Ordinal))
+            if (text.StartsWith("TRANSFLUX_BATCH_RESULT:", StringComparison.Ordinal))
             {
                 try
                 {
-                    using var json = JsonDocument.Parse(text["REAKILLER_BATCH_RESULT:".Length..]);
+                    using var json = JsonDocument.Parse(text["TRANSFLUX_BATCH_RESULT:".Length..]);
                     var data = json.RootElement;
                     var batch = data.GetProperty("batch").GetInt32();
                     var batches = data.GetProperty("batches").GetInt32();
@@ -267,11 +267,11 @@ public partial class MainWindow : Window
                 catch (Exception ex) { Log.AppendText("Batch metrics parse warning: " + ex.Message + Environment.NewLine); }
                 return;
             }
-            if (text.StartsWith("REAKILLER_BATCH:", StringComparison.Ordinal))
+            if (text.StartsWith("TRANSFLUX_BATCH:", StringComparison.Ordinal))
             {
                 try
                 {
-                    using var json = JsonDocument.Parse(text["REAKILLER_BATCH:".Length..]);
+                    using var json = JsonDocument.Parse(text["TRANSFLUX_BATCH:".Length..]);
                     var data = json.RootElement;
                     var batch = data.GetProperty("batch").GetInt32();
                     var batches = data.GetProperty("batches").GetInt32();
@@ -287,11 +287,11 @@ public partial class MainWindow : Window
                 catch (Exception ex) { Log.AppendText("Batch progress parse warning: " + ex.Message + Environment.NewLine); }
                 return;
             }
-            if (text.StartsWith("REAKILLER_EVENT:", StringComparison.Ordinal))
+            if (text.StartsWith("TRANSFLUX_EVENT:", StringComparison.Ordinal))
             {
                 try
                 {
-                    using var json = JsonDocument.Parse(text["REAKILLER_EVENT:".Length..]);
+                    using var json = JsonDocument.Parse(text["TRANSFLUX_EVENT:".Length..]);
                     var data = json.RootElement;
                     var source = data.GetProperty("source").GetString() ?? "";
                     var status = data.GetProperty("status").GetString() ?? "UNKNOWN";
@@ -392,17 +392,17 @@ public partial class MainWindow : Window
                 "Confirm in-place replacement", MessageBoxButton.YesNo, MessageBoxImage.Warning)
             != MessageBoxResult.Yes) return;
 
-        var cli = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
+        var cli = Path.Combine(AppContext.BaseDirectory, "Transflux.exe");
         if (!File.Exists(cli))
         {
-            MessageBox.Show("ReaKiller.exe was not found alongside the desktop application. Use the published desktop bundle.",
+            MessageBox.Show("Transflux.exe was not found alongside the desktop application. Use the published desktop bundle.",
                 "Conversion engine missing");
             return;
         }
 
         _lastReport = null;
-        _stopMarker = Path.Combine(Path.GetTempPath(), "reakiller-stop-" + Guid.NewGuid().ToString("N") + ".flag");
-        _pauseMarker = Path.Combine(Path.GetTempPath(), "reakiller-pause-" + Guid.NewGuid().ToString("N") + ".flag");
+        _stopMarker = Path.Combine(Path.GetTempPath(), "transflux-stop-" + Guid.NewGuid().ToString("N") + ".flag");
+        _pauseMarker = Path.Combine(Path.GetTempPath(), "transflux-pause-" + Guid.NewGuid().ToString("N") + ".flag");
         OpenReportButton.IsEnabled = false;
         var start = new ProcessStartInfo(cli)
         {
@@ -415,7 +415,7 @@ public partial class MainWindow : Window
         start.ArgumentList.Add(source);
         if (SingleFileMode.IsChecked == true)
         {
-            _selectionListFile = Path.Combine(Path.GetTempPath(), "reakiller-files-" + Guid.NewGuid().ToString("N") + ".txt");
+            _selectionListFile = Path.Combine(Path.GetTempPath(), "transflux-files-" + Guid.NewGuid().ToString("N") + ".txt");
             File.WriteAllLines(_selectionListFile, _selectedFiles);
             start.ArgumentList.Add("--files-from");
             start.ArgumentList.Add(_selectionListFile);
@@ -522,7 +522,7 @@ public partial class MainWindow : Window
             await Task.WhenAll(standard, errors);
             ProgressText.Text = _cancelRequested ? "Cancelled" : _process.ExitCode == 0 ? "Complete" : $"Exited with code {_process.ExitCode}";
             if (_cancelRequested) SummaryText.Text = "Cancelled. Review source and output files before rerunning.";
-            _lastReport = Path.Combine(inPlace || optimize ? sourceDirectory : Path.GetFullPath(destination), "reakiller-report.csv");
+            _lastReport = Path.Combine(inPlace || optimize ? sourceDirectory : Path.GetFullPath(destination), "transflux-report.csv");
             OpenReportButton.IsEnabled = File.Exists(_lastReport);
             if (_process.ExitCode == 0 && !_cancelRequested) Progress.Value = 100;
         }
@@ -694,9 +694,9 @@ public partial class MainWindow : Window
             MessageBox.Show("Choose a folder containing supported images or an individual image.", "Preview");
             return;
         }
-        var cli = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
-        if (!File.Exists(cli)) { MessageBox.Show("ReaKiller.exe is missing.", "Preview"); return; }
-        var temporary = Path.Combine(Path.GetTempPath(), "ReaKillerPreview", Guid.NewGuid().ToString("N"));
+        var cli = Path.Combine(AppContext.BaseDirectory, "Transflux.exe");
+        if (!File.Exists(cli)) { MessageBox.Show("Transflux.exe is missing.", "Preview"); return; }
+        var temporary = Path.Combine(Path.GetTempPath(), "TransfluxPreview", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temporary);
         try
         {

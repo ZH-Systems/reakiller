@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Transflux.Core;
 
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 
 internal sealed class QueueStore : IDisposable
 {

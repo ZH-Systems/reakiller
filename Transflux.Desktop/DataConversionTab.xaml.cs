@@ -7,7 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 
 public partial class DataConversionTab : System.Windows.Controls.UserControl
 {
@@ -70,7 +70,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
                 var state = QueueState.Failed;
                 try
                 {
-                    var exe = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
+                    var exe = Path.Combine(AppContext.BaseDirectory, "Transflux.exe");
                     var start = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
                     foreach (var arg in running.Arguments) start.ArgumentList.Add(arg);
                     start.ArgumentList.Add("--summary-json");
@@ -158,7 +158,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             if (preview && !File.Exists(source)) throw new ArgumentException("Preview requires one file.");
             if (!int.TryParse(Workers.Text, out var workers) || workers < 1 || workers > (Pdf ? 4 : 16))
                 throw new ArgumentException("Invalid worker count.");
-            var executable = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
+            var executable = Path.Combine(AppContext.BaseDirectory, "Transflux.exe");
             if (!File.Exists(executable)) throw new IOException("The bundled CLI is missing.");
             var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true,
                 RedirectStandardOutput = true, RedirectStandardError = true };
