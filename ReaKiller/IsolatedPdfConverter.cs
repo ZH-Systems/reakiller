@@ -42,6 +42,7 @@ internal sealed class IsolatedPdfConverter(PdfCsvOptions options, OcrConfigurati
             RedirectStandardError = true, RedirectStandardOutput = true };
         if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
             start.ArgumentList.Add(typeof(IsolatedPdfConverter).Assembly.Location);
+        start.RedirectStandardInput = true;
         foreach (var argument in new[] { "--internal-pdf-worker", source, output,
             preview ? "preview" : "convert", JsonSerializer.Serialize(options), JsonSerializer.Serialize(ocr) })
             start.ArgumentList.Add(argument);
@@ -50,6 +51,9 @@ internal sealed class IsolatedPdfConverter(PdfCsvOptions options, OcrConfigurati
         using var process = Process.Start(start) ?? throw new IOException("Unable to start PDF worker.");
         try { containment?.Assign(process); }
         catch { if (!process.HasExited) process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); throw; }
+        // Worker waits for admission before opening any input.
+        await process.StandardInput.WriteLineAsync("START");
+        process.StandardInput.Close();
         // Drain without retaining document-derived stdout or stderr.
         var stdout = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
         var stderr = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
@@ -89,6 +93,7 @@ internal sealed class IsolatedPdfConverter(PdfCsvOptions options, OcrConfigurati
     {
         try
         {
+            if (await Console.In.ReadLineAsync() != "START") return 2;
             if (args.Length != 6 || (args[3] != "preview" && args[3] != "convert")) return 2;
             if (OperatingSystem.IsWindows())
             {
