@@ -9,9 +9,9 @@ using FellowOakDicom.Imaging.Codec;
 using FellowOakDicom.Imaging.NativeCodec;
 using Microsoft.Extensions.DependencyInjection;
 
-return await ReaKiller.RunAsync(args);
+return await TransfluxCli.RunAsync(args);
 
-public static class ReaKiller
+public static class TransfluxCli
 {
     private static readonly Lazy<bool> NativeDicomCodecsReady = new(() =>
     {
@@ -420,7 +420,7 @@ public static class ReaKiller
                     var detail = fileResults.FirstOrDefault(r => r.Status == "FAILED")?.Detail ?? "";
                     lock (progressLock)
                     {
-                        Console.WriteLine("REAKILLER_EVENT:" + JsonSerializer.Serialize(new { source = file, status, detail, done, total = inputFiles.Length }));
+                        Console.WriteLine("TRANSFLUX_EVENT:" + JsonSerializer.Serialize(new { source = file, status, detail, done, total = inputFiles.Length }));
                         DrawProgress(done, inputFiles.Length);
                     }
                 }
@@ -431,7 +431,7 @@ public static class ReaKiller
             .ThenBy(r => r.Output, StringComparer.OrdinalIgnoreCase).ToArray();
         if (!options.DryRun)
         {
-            var report = Path.Combine(destination, "reakiller-report.csv");
+            var report = Path.Combine(destination, "transflux-report.csv");
             await File.WriteAllLinesAsync(report,
                 new[] { "Source,Output,Status,Detail" }.Concat(ordered.Select(r =>
                     string.Join(",", Escape(r.Source), Escape(r.Output),
@@ -460,7 +460,7 @@ public static class ReaKiller
 
     private static async Task<int> RunIsolatedBatches(string[] args, Options options, string[] files)
     {
-        var exe = Environment.ProcessPath ?? throw new IOException("ReaKiller executable not found.");
+        var exe = Environment.ProcessPath ?? throw new IOException("Transflux executable not found.");
         var argv = args.Skip(args[0].Equals("convert", StringComparison.OrdinalIgnoreCase) ? 2 : 1).ToList();
         foreach (var flag in new[] { "--files-from", "--batch-size", "--index-offset" })
         {
@@ -471,7 +471,7 @@ public static class ReaKiller
             ? Path.GetDirectoryName(Path.GetFullPath(options.Source))!
             : Path.GetFullPath(options.Source);
         var report = Path.Combine(options.InPlace || options.OptimizeInPlace ? sourceRoot : Path.GetFullPath(options.Destination),
-            "reakiller-report.csv");
+            "transflux-report.csv");
         var rows = new List<string> { "Source,Output,Status,Detail" };
         // Ensure all batch outputs are distinct before starting any child.
         var planned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -500,7 +500,7 @@ public static class ReaKiller
         {
             if (!await WaitWhilePausedAsync(options.PauseFile, options.StopFile)) return 3;
             if (options.StopFile is not null && File.Exists(options.StopFile)) return 3;
-            var list = Path.Combine(Path.GetTempPath(), "reakiller-batch-" + Guid.NewGuid().ToString("N") + ".txt");
+            var list = Path.Combine(Path.GetTempPath(), "transflux-batch-" + Guid.NewGuid().ToString("N") + ".txt");
             var count = Math.Min(options.BatchSize, files.Length - start);
             try
             {
@@ -520,7 +520,7 @@ public static class ReaKiller
                 child.StartInfo.ArgumentList.Add(start.ToString(CultureInfo.InvariantCulture));
                 var batchNumber = start / options.BatchSize + 1;
                 Console.WriteLine($"Starting batch {batchNumber:N0} of {batchTotal:N0} ({count:N0} files).");
-                Console.WriteLine("REAKILLER_BATCH:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, completed = start, total = files.Length, count }));
+                Console.WriteLine("TRANSFLUX_BATCH:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, completed = start, total = files.Length, count }));
                 if (File.Exists(report)) File.Delete(report);
                 var batchTimer = Stopwatch.StartNew();
                 int batchCompleted = 0, batchFailed = 0, batchSkipped = 0;
@@ -530,17 +530,17 @@ public static class ReaKiller
                     string? line;
                     while ((line = await child.StandardOutput.ReadLineAsync()) is not null)
                     {
-                        if (line.StartsWith("REAKILLER_EVENT:", StringComparison.Ordinal))
+                        if (line.StartsWith("TRANSFLUX_EVENT:", StringComparison.Ordinal))
                         {
                             try
                             {
-                                using var json = JsonDocument.Parse(line["REAKILLER_EVENT:".Length..]);
+                                using var json = JsonDocument.Parse(line["TRANSFLUX_EVENT:".Length..]);
                                 var evt = json.RootElement;
                                 Interlocked.Increment(ref batchCompleted);
                                 var eventStatus = evt.GetProperty("status").GetString();
                                 if (eventStatus == "FAILED") Interlocked.Increment(ref batchFailed);
                                 if (eventStatus == "SKIPPED") Interlocked.Increment(ref batchSkipped);
-                                Console.WriteLine("REAKILLER_EVENT:" + JsonSerializer.Serialize(new
+                                Console.WriteLine("TRANSFLUX_EVENT:" + JsonSerializer.Serialize(new
                                 {
                                     source = evt.GetProperty("source").GetString(),
                                     status = evt.GetProperty("status").GetString(),
@@ -569,7 +569,7 @@ public static class ReaKiller
                 var batchSeconds = Math.Max(0.001, batchTimer.Elapsed.TotalSeconds);
                 var batchRate = batchCompleted / batchSeconds;
                 Console.WriteLine($"Batch {batchNumber:N0}/{batchTotal:N0} finished: {batchCompleted:N0}/{count:N0} processed, {batchFailed:N0} failed, {batchSkipped:N0} skipped; {batchTimer.Elapsed:hh\\:mm\\:ss}; {batchRate:F2} images/sec.");
-                Console.WriteLine("REAKILLER_BATCH_RESULT:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, processed = batchCompleted, count, failed = batchFailed, skipped = batchSkipped, seconds = batchTimer.Elapsed.TotalSeconds, imagesPerSecond = batchRate, exitCode = child.ExitCode }));
+                Console.WriteLine("TRANSFLUX_BATCH_RESULT:" + JsonSerializer.Serialize(new { batch = batchNumber, batches = batchTotal, processed = batchCompleted, count, failed = batchFailed, skipped = batchSkipped, seconds = batchTimer.Elapsed.TotalSeconds, imagesPerSecond = batchRate, exitCode = child.ExitCode }));
                 if (File.Exists(report))
                 {
                     var part = await File.ReadAllLinesAsync(report);
@@ -1019,9 +1019,9 @@ public static class ReaKiller
         Console.WriteLine("""
             Transflux: IMG, DICOM, JPEG, TIFF to PNG.
             Usage:
-              ReaKiller.exe convert <file-or-directory> --output <directory> [options]
-              ReaKiller.exe xml-to-csv <file-or-directory> --output <directory> [options]
-              ReaKiller.exe pdf-to-csv <file-or-directory> --output <directory> [options]
+              Transflux.exe convert <file-or-directory> --output <directory> [options]
+              Transflux.exe xml-to-csv <file-or-directory> --output <directory> [options]
+              Transflux.exe pdf-to-csv <file-or-directory> --output <directory> [options]
             Options:\n              --include-ext bmp,tif   Only convert these source extensions\n              --exclude-ext jpg,png   Skip these source extensions
               --format png|jpg        Output format (default png)\n              --optimize-in-place     Conservative same-format optimization (PNG only)\n              --in-place              Write converted image beside source, then delete converted source
               --recursive, -r         Traverse subdirectories

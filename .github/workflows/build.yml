@@ -30,14 +30,14 @@ jobs:
         run: |
           $version = $env:GITHUB_REF_NAME.Substring(1)
           if ($version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw "Invalid tag" }
-          foreach ($path in @("ReaKiller/ReaKiller.csproj", "ReaKiller.Desktop/ReaKiller.Desktop.csproj", "ReaKiller.Updater/ReaKiller.Updater.csproj")) {
+          foreach ($path in @("Transflux/Transflux.csproj", "Transflux.Desktop/Transflux.Desktop.csproj", "Transflux.Updater/Transflux.Updater.csproj")) {
             $contents = Get-Content $path -Raw
             $contents = [regex]::Replace($contents, '<Version>[^<]+</Version>', "<Version>$version</Version>")
             Set-Content $path $contents
           }
-          $wxs = Get-Content installer/ReaKiller.wxs -Raw
+          $wxs = Get-Content installer/Transflux.wxs -Raw
           $wxs = $wxs.Replace('Version="1.0.0"', ('Version="' + $version + '"'))
-          Set-Content installer/ReaKiller.wxs $wxs
+          Set-Content installer/Transflux.wxs $wxs
       - name: Audit all project dependency graphs
         shell: pwsh
         run: |
@@ -62,22 +62,22 @@ jobs:
           path: dependency-audit/
           if-no-files-found: error
       - name: Restore
-        run: dotnet restore ReaKiller/ReaKiller.csproj
+        run: dotnet restore Transflux/Transflux.csproj
       - name: Build
-        run: dotnet build ReaKiller/ReaKiller.csproj -c Release --no-restore
+        run: dotnet build Transflux/Transflux.csproj -c Release --no-restore
       - name: Test
-        run: dotnet test ReaKiller.Tests/ReaKiller.Tests.csproj -c Release
+        run: dotnet test Transflux.Tests/Transflux.Tests.csproj -c Release
       - name: Publish CLI
-        run: dotnet publish ReaKiller/ReaKiller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+        run: dotnet publish Transflux/Transflux.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
       - name: Synthetic conversion benchmark
         shell: pwsh
-        run: ./scripts/Benchmark-DataConversion.ps1 -Executable ./publish/ReaKiller.exe -Files 10 -Rows 1000
+        run: ./scripts/Benchmark-DataConversion.ps1 -Executable ./publish/Transflux.exe -Files 10 -Rows 1000
       - name: Build desktop
-        run: dotnet build ReaKiller.Desktop/ReaKiller.Desktop.csproj -c Release
+        run: dotnet build Transflux.Desktop/Transflux.Desktop.csproj -c Release
       - name: Publish desktop
-        run: dotnet publish ReaKiller.Desktop/ReaKiller.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o desktop
+        run: dotnet publish Transflux.Desktop/Transflux.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o desktop
       - name: Publish updater
-        run: dotnet publish ReaKiller.Updater/ReaKiller.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o updater
+        run: dotnet publish Transflux.Updater/Transflux.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o updater
       - name: Assemble bundle
         shell: pwsh
         run: |
@@ -85,6 +85,11 @@ jobs:
           Copy-Item desktop/* bundle/ -Recurse -Force
           Copy-Item publish/* bundle/ -Recurse -Force
           Copy-Item updater/* bundle/ -Recurse -Force
+          foreach ($name in @('Transflux.exe','Transflux.Desktop.exe','Transflux.Updater.exe')) {
+            $file = Get-Item -LiteralPath (Join-Path bundle $name)
+            if ($file.VersionInfo.ProductName -ne 'Transflux') { throw "Incorrect product identity: $name" }
+          }
+          if (Get-ChildItem bundle -Recurse -File | Where-Object Name -Match '(?i)reakiller|reaconverter') { throw 'Legacy artifact in bundle' }
       - name: Install WiX
         run: dotnet tool install --global wix --version 4.0.6
       - name: Build MSI
@@ -92,16 +97,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force installers | Out-Null
           ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
-          wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
-          if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
+          wix build -arch x64 installer/Transflux.wxs installers/Payload.wxs -out installers/Transflux-win-x64.msi
+          if (!(Test-Path installers/Transflux-win-x64.msi)) { throw "MSI missing" }
       - name: Validate release candidate
         shell: pwsh
-        run: ./scripts/Test-ReleaseCandidate.ps1 -Executable ./publish/ReaKiller.exe -Msi ./installers/ReaKiller-win-x64.msi
+        run: ./scripts/Test-ReleaseCandidate.ps1 -Executable ./publish/Transflux.exe -Msi ./installers/Transflux-win-x64.msi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ReaKiller-MSI-win-x64
-          path: installers/ReaKiller-win-x64.msi
+          name: Transflux-MSI-win-x64
+          path: installers/Transflux-win-x64.msi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ReaKiller-Desktop-win-x64
+          name: Transflux-Desktop-win-x64
           path: bundle/

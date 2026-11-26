@@ -10,7 +10,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 
 internal sealed record AvailableUpdate(Version Version, string Notes, string MsiUrl, string ShaUrl);
 
@@ -90,8 +90,8 @@ internal static class UpdateService
         {
             var name = asset.GetProperty("name").GetString();
             var url = asset.GetProperty("browser_download_url").GetString();
-            if (name == "ReaKiller-win-x64.msi" && url is not null && AllowedAsset(url, rawTag, name)) msi = url;
-            if (name == "ReaKiller-win-x64.msi.sha256" && url is not null && AllowedAsset(url, rawTag, name)) hash = url;
+            if (name == "Transflux-win-x64.msi" && url is not null && AllowedAsset(url, rawTag, name)) msi = url;
+            if (name == "Transflux-win-x64.msi.sha256" && url is not null && AllowedAsset(url, rawTag, name)) hash = url;
         }
         return msi is null || hash is null ? null :
             new AvailableUpdate(latest, root.GetProperty("body").GetString() ?? "", msi, hash);
@@ -99,13 +99,13 @@ internal static class UpdateService
 
     public static async Task DownloadAndLaunchAsync(AvailableUpdate update)
     {
-        var updater = Path.Combine(AppContext.BaseDirectory, "ReaKiller.Updater.exe");
+        var updater = Path.Combine(AppContext.BaseDirectory, "Transflux.Updater.exe");
         if (!File.Exists(updater)) throw new FileNotFoundException("The update helper is missing.", updater);
         var directory = Directory.CreateTempSubdirectory("transflux-update-").FullName;
         bool launched = false;
         try
         {
-        var msi = Path.Combine(directory, "ReaKiller-win-x64.msi");
+        var msi = Path.Combine(directory, "Transflux-win-x64.msi");
         using var checksumResponse = await GetAsset(update.ShaUrl);
         var expectedText = System.Text.Encoding.UTF8.GetString(await ReadLimited(checksumResponse, 4096));
         var sha = expectedText.Split([' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)[0];
@@ -134,7 +134,7 @@ internal static class UpdateService
             if (!Convert.ToHexString(await SHA256.HashDataAsync(file)).Equals(sha, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Installer checksum verification failed.");
         }
-        var stagedUpdater = Path.Combine(directory, "ReaKiller.Updater.exe");
+        var stagedUpdater = Path.Combine(directory, "Transflux.Updater.exe");
         File.Copy(updater, stagedUpdater, false);
         var start = new ProcessStartInfo(stagedUpdater) { UseShellExecute = false, WorkingDirectory = directory };
         foreach (var arg in new[] { "--install", msi, sha, Environment.ProcessId.ToString() })

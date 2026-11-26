@@ -5,7 +5,7 @@ public sealed class ConversionTests
 {
     private static string NewFolder()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "ReaKiller-tests", Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(Path.GetTempPath(), "Transflux-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         return folder;
     }
@@ -27,7 +27,7 @@ public sealed class ConversionTests
         var bytes = new byte[values.Length * 2];
         Buffer.BlockCopy(values, 0, bytes, 0, bytes.Length);
 
-        var method = typeof(ReaKiller).GetMethod(
+        var method = typeof(TransfluxCli).GetMethod(
             "EstimateCarestreamWindow",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         Assert.NotNull(method);
@@ -50,7 +50,7 @@ public sealed class ConversionTests
             WriteJpeg(Path.Combine(source, "a.bmp"));
             WriteJpeg(Path.Combine(source, "b.jpg"));
             WriteJpeg(Path.Combine(source, "c.tif"));
-            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output,
+            var exit = await TransfluxCli.RunAsync(["convert", source, "--output", output,
                 "--include-ext", ".bmp,.jpg", "--exclude-ext", "jpg"]);
             Assert.Equal(0, exit);
             Assert.True(File.Exists(Path.Combine(output, "a_bmp.png")));
@@ -74,7 +74,7 @@ public sealed class ConversionTests
                 for (var i = 0; i < 255; i++)
                     bmp.Write(Path.Combine(source, $"image_{i:D4}.bmp"), MagickFormat.Bmp);
             }
-            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output,
+            var exit = await TransfluxCli.RunAsync(["convert", source, "--output", output,
                 "--threads", "2"]);
             Assert.Equal(0, exit);
             Assert.Equal(255, Directory.GetFiles(output, "*.png").Length);
@@ -91,7 +91,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "45706452997Kokolus Daniel .JPG");
             var output = Path.Combine(root, "converted");
             WriteJpeg(source);
-            var code = await ReaKiller.RunAsync(["convert", source, "--output", output,
+            var code = await TransfluxCli.RunAsync(["convert", source, "--output", output,
                 "--name-pattern", "{name}"]);
             Assert.Equal(0, code);
             Assert.True(File.Exists(Path.Combine(output, "45706452997Kokolus Daniel.png")));
@@ -109,7 +109,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "invalid.dic");
             await File.WriteAllTextAsync(source, "not a DICOM image");
             var output = Path.Combine(root, "converted");
-            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output]);
+            var exit = await TransfluxCli.RunAsync(["convert", source, "--output", output]);
             Assert.NotEqual(0, exit);
             Assert.True(File.Exists(source));
             Assert.False(File.Exists(Path.Combine(output, "invalid_dic.png")));
@@ -126,7 +126,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "carestream.rvg");
             var output = Path.Combine(root, "converted");
             WriteJpeg(source);
-            var code = await ReaKiller.RunAsync(["convert", source, "--output", output]);
+            var code = await TransfluxCli.RunAsync(["convert", source, "--output", output]);
             Assert.Equal(0, code);
             Assert.True(File.Exists(source));
             using var converted = new MagickImage(Path.Combine(output, "carestream_rvg.png"));
@@ -146,7 +146,7 @@ public sealed class ConversionTests
             var output = Path.Combine(root, "converted");
             await File.WriteAllTextAsync(source, "not a supported Carestream image payload");
             var original = await File.ReadAllBytesAsync(source);
-            var code = await ReaKiller.RunAsync(["convert", source, "--output", output, "--in-place"]);
+            var code = await TransfluxCli.RunAsync(["convert", source, "--output", output, "--in-place"]);
             Assert.NotEqual(0, code);
             Assert.Equal(original, await File.ReadAllBytesAsync(source));
             Assert.False(File.Exists(Path.Combine(root, "unknown_rvg.png")));
@@ -163,7 +163,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "carestream.cmp");
             var output = Path.Combine(root, "converted");
             WriteJpeg(source);
-            var exit = await ReaKiller.RunAsync(["convert", source, "--output", output,
+            var exit = await TransfluxCli.RunAsync(["convert", source, "--output", output,
                 "--adaptive-workers", "--threads", "2"]);
             Assert.Equal(0, exit);
             Assert.True(File.Exists(Path.Combine(output, "carestream_cmp.png")));
@@ -181,7 +181,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "photo.img");
             var output = Path.Combine(root, "out");
             WriteJpeg(source);
-            var status = await ReaKiller.RunAsync(["convert", source, "--output", output, "--format", "jpg"]);
+            var status = await TransfluxCli.RunAsync(["convert", source, "--output", output, "--format", "jpg"]);
             Assert.Equal(0, status);
             Assert.True(File.Exists(Path.Combine(output, "photo_img.jpg")));
             Assert.True(File.Exists(source));
@@ -198,7 +198,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "photo.jpg");
             WriteJpeg(source);
             var original = await File.ReadAllBytesAsync(source);
-            var result = await ReaKiller.RunAsync(["convert", source, "--optimize-in-place"]);
+            var result = await TransfluxCli.RunAsync(["convert", source, "--optimize-in-place"]);
             Assert.Equal(0, result);
             Assert.Equal(original, await File.ReadAllBytesAsync(source));
         }
@@ -220,7 +220,7 @@ public sealed class ConversionTests
             var list = Path.Combine(root, "selection.txt");
             await File.WriteAllLinesAsync(list, [first, second]);
             var output = Path.Combine(root, "converted");
-            var code = await ReaKiller.RunAsync(["convert", first, "--files-from", list,
+            var code = await TransfluxCli.RunAsync(["convert", first, "--files-from", list,
                 "--output", output, "--name-pattern", "{index}_{name}"]);
             Assert.Equal(0, code);
             Assert.True(File.Exists(Path.Combine(output, "00001_first.png")));
@@ -242,7 +242,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "example.img");
             var output = Path.Combine(root, "converted");
             WriteJpeg(source);
-            var result = await ReaKiller.RunAsync(
+            var result = await TransfluxCli.RunAsync(
                 ["convert", source, "--output", output,
                  "--name-pattern", "dental_{index}_{name}_{ext}"]);
             Assert.Equal(0, result);
@@ -260,10 +260,10 @@ public sealed class ConversionTests
         {
             WriteJpeg(Path.Combine(root, "first.img"));
             WriteJpeg(Path.Combine(root, "second.jpg"));
-            var output = Path.Combine(Path.GetTempPath(), "ReaKiller-test-output", Guid.NewGuid().ToString("N"));
+            var output = Path.Combine(Path.GetTempPath(), "Transflux-test-output", Guid.NewGuid().ToString("N"));
             try
             {
-                var result = await ReaKiller.RunAsync(
+                var result = await TransfluxCli.RunAsync(
                     ["convert", root, "--output", output, "--name-pattern", "same"]);
                 Assert.Equal(2, result);
                 Assert.False(File.Exists(Path.Combine(output, "same.png")));
@@ -284,7 +284,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "x.img");
             var destination = Path.Combine(root, "output");
             WriteJpeg(source);
-            var code = await ReaKiller.RunAsync(["convert", source, "--output", destination, "--compression", "max"]);
+            var code = await TransfluxCli.RunAsync(["convert", source, "--output", destination, "--compression", "max"]);
             Assert.Equal(0, code);
             Assert.True(File.Exists(source));
             using var png = new MagickImage(Path.Combine(destination, "x_img.png"));
@@ -303,7 +303,7 @@ public sealed class ConversionTests
             var source = Path.Combine(root, "enhance.jpg");
             var outputFolder = Path.Combine(root, "converted");
             WriteJpeg(source);
-            var result = await ReaKiller.RunAsync(
+            var result = await TransfluxCli.RunAsync(
                 ["convert", source, "--output", outputFolder,
                  "--contrast", "15", "--sharpen", "0.6", "--auto-contrast"]);
             Assert.Equal(0, result);
@@ -338,7 +338,7 @@ public sealed class ConversionTests
             var arguments = inPlace
                 ? new[] { "convert", source, "--in-place" }
                 : new[] { "convert", source, "--output", outputFolder };
-            Assert.Equal(0, await ReaKiller.RunAsync(arguments));
+            Assert.Equal(0, await TransfluxCli.RunAsync(arguments));
             var output = Path.Combine(outputFolder, "dated_img.png");
             Assert.True(File.Exists(output));
             Assert.Equal(expectedCreated, File.GetCreationTimeUtc(output));
@@ -356,7 +356,7 @@ public sealed class ConversionTests
         {
             var source = Path.Combine(root, "x.img");
             WriteJpeg(source);
-            var code = await ReaKiller.RunAsync(["convert", source, "--in-place"]);
+            var code = await TransfluxCli.RunAsync(["convert", source, "--in-place"]);
             Assert.Equal(0, code);
             Assert.False(File.Exists(source));
             Assert.True(File.Exists(Path.Combine(root, "x_img.png")));
@@ -374,7 +374,7 @@ public sealed class ConversionTests
             var output = Path.Combine(root, "x_img.png");
             WriteJpeg(source);
             File.WriteAllText(output, "DO NOT REPLACE");
-            var code = await ReaKiller.RunAsync(["convert", source, "--in-place"]);
+            var code = await TransfluxCli.RunAsync(["convert", source, "--in-place"]);
             Assert.Equal(0, code);
             Assert.True(File.Exists(source));
             Assert.Equal("DO NOT REPLACE", File.ReadAllText(output));
@@ -390,7 +390,7 @@ public sealed class ConversionTests
         {
             var source = Path.Combine(root, "x.img");
             await File.WriteAllBytesAsync(source, [1, 2, 3, 4]);
-            var code = await ReaKiller.RunAsync(["convert", source, "--in-place"]);
+            var code = await TransfluxCli.RunAsync(["convert", source, "--in-place"]);
             Assert.Equal(1, code);
             Assert.True(File.Exists(source));
             Assert.False(File.Exists(Path.Combine(root, "x_img.png")));

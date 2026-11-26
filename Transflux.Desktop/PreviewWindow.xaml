@@ -1,13 +1,13 @@
-<Window x:Class="ReaKiller.Desktop.PreviewWindow"
+<Window x:Class="Transflux.Desktop.PreviewWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="ReaKiller | Before and after" Width="1050" Height="660"
+ Title="Transflux | Before and after" Width="1050" Height="660"
  MinWidth="730" MinHeight="480" Background="#F2F6FB"
  WindowStartupLocation="CenterOwner" FontFamily="Segoe UI">
  <Grid Margin="22">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel Margin="0,0,0,18">
-   <TextBlock Text="Before &amp; after" FontSize="25" FontWeight="SemiBold" Foreground="#103968"
+   <TextBlock Text="Before &amp; after" FontSize="25" FontWeight="SemiBold" Foreground="#142C25"
     ToolTip="The left image has default conversion settings. The right image uses your current adjustments."/>
    <TextBlock Text="Use this visual comparison before applying changes to an entire batch."
     Foreground="#607B98" Margin="0,5,0,0"/>

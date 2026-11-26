@@ -10,8 +10,8 @@ if (!int.TryParse(args[3], out var parentPid) || parentPid <= 0 ||
     expectedSha.Length != 64 || !expectedSha.All(Uri.IsHexDigit))
     return 2;
 var self = Environment.ProcessPath;
-if (self is null || !Path.GetFileName(self).Equals("ReaKiller.Updater.exe", StringComparison.OrdinalIgnoreCase) ||
-    !Path.GetFileName(msi).Equals("ReaKiller-win-x64.msi", StringComparison.OrdinalIgnoreCase) ||
+if (self is null || !Path.GetFileName(self).Equals("Transflux.Updater.exe", StringComparison.OrdinalIgnoreCase) ||
+    !Path.GetFileName(msi).Equals("Transflux-win-x64.msi", StringComparison.OrdinalIgnoreCase) ||
     !string.Equals(Path.GetDirectoryName(msi), Path.GetDirectoryName(self), StringComparison.OrdinalIgnoreCase))
     return 2;
 try
@@ -39,13 +39,13 @@ try
         RedirectStandardOutput = true, RedirectStandardError = true
     };
     foreach (var arg in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
-        "$ErrorActionPreference='Stop'; $s=Get-AuthenticodeSignature -LiteralPath $env:REAKILLER_MSI; " +
+        "$ErrorActionPreference='Stop'; $s=Get-AuthenticodeSignature -LiteralPath $env:TRANSFLUX_MSI; " +
         "$u=Get-AuthenticodeSignature -LiteralPath $env:TRANSFLUX_UPDATER; " +
         "if($s.Status -ne 'Valid' -or $u.Status -ne 'Valid' -or !$s.SignerCertificate -or !$u.SignerCertificate){exit 1}; " +
         "if($s.SignerCertificate.GetPublicKeyString() -ceq $u.SignerCertificate.GetPublicKeyString() -and " +
         "$s.SignerCertificate.PublicKey.Oid.Value -ceq $u.SignerCertificate.PublicKey.Oid.Value){exit 0}; exit 1" })
         signatureCheck.ArgumentList.Add(arg);
-    signatureCheck.Environment["REAKILLER_MSI"] = msi;
+    signatureCheck.Environment["TRANSFLUX_MSI"] = msi;
     signatureCheck.Environment["TRANSFLUX_UPDATER"] = self;
     using (var check = Process.Start(signatureCheck) ?? throw new IOException("Unable to validate signatures."))
     {

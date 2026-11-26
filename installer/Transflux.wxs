@@ -1,0 +1,25 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Transflux" Manufacturer="ZH Systems" Version="1.0.0" UpgradeCode="F862E9A4-AD7C-4ED3-9462-60D44B19B85E" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Transflux is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="TransfluxProductIcon" SourceFile="assets/Transflux.ico" />
+    <Property Id="ARPPRODUCTICON" Value="TransfluxProductIcon" />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Transflux" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuDirectory" Name="Transflux" />
+    </StandardDirectory>
+    <Feature Id="MainFeature" Title="Transflux" Level="1">
+      <ComponentGroupRef Id="PublishedFiles" />
+      <ComponentRef Id="Shortcuts" />
+    </Feature>
+  </Package>
+  <Fragment>
+    <Component Id="Shortcuts" Directory="ProgramMenuDirectory" Guid="7152DC95-CC20-41AE-8EA7-17C5BFF48951">
+      <Shortcut Id="TransfluxStart" Name="Transflux" Description="File conversion, compression and transformation" Target="[INSTALLFOLDER]Transflux.Desktop.exe" WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveProgramsMenu" On="uninstall" />
+      <RegistryValue Root="HKLM" Key="Software\ZH Systems\Transflux" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

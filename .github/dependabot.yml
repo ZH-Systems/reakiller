@@ -2,10 +2,10 @@ version: 2
 updates:
   - package-ecosystem: nuget
     directories:
-      - /ReaKiller
-      - /ReaKiller.Desktop
-      - /ReaKiller.Updater
-      - /ReaKiller.Tests
+      - /Transflux
+      - /Transflux.Desktop
+      - /Transflux.Updater
+      - /Transflux.Tests
       - /Transflux.Core
     schedule:
       interval: weekly

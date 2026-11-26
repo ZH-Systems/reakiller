@@ -1,14 +1,14 @@
-<Application x:Class="ReaKiller.Desktop.App"
+<Application x:Class="Transflux.Desktop.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="AkituBlue" Color="#2763C4"/>
-        <SolidColorBrush x:Key="DeepBlue" Color="#103968"/>
-        <SolidColorBrush x:Key="Canvas" Color="#F3F7FC"/>
+        <SolidColorBrush x:Key="Emerald" Color="#237653"/>
+        <SolidColorBrush x:Key="DeepEmerald" Color="#142C25"/>
+        <SolidColorBrush x:Key="Canvas" Color="#F2F7F4"/>
         <Style TargetType="Button">
             <Setter Property="Padding" Value="13,8"/>
-            <Setter Property="Background" Value="{StaticResource AkituBlue}"/>
+            <Setter Property="Background" Value="{StaticResource Emerald}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontWeight" Value="SemiBold"/>

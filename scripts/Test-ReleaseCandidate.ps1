@@ -5,13 +5,16 @@ param(
 $ErrorActionPreference = 'Stop'
 $exe = (Resolve-Path -LiteralPath $Executable).Path
 $msiPath = (Resolve-Path -LiteralPath $Msi).Path
+if ([IO.Path]::GetFileName($exe) -cne 'Transflux.exe' -or [IO.Path]::GetFileName($msiPath) -cne 'Transflux-win-x64.msi') {
+    throw 'Unexpected candidate file names'
+}
 $installer = New-Object -ComObject WindowsInstaller.Installer
 $db = $installer.OpenDatabase($msiPath, 0)
 try {
     $expected = @{
         ProductName = 'Transflux'
         Manufacturer = 'ZH Systems'
-        UpgradeCode = '{5D7C9311-54B1-4E3E-8398-1E7637097B25}'
+        UpgradeCode = '{F862E9A4-AD7C-4ED3-9462-60D44B19B85E}'
     }
     foreach ($key in $expected.Keys) {
         $query = 'SELECT `Value` FROM `Property` WHERE `Property` = ''{0}''' -f $key
@@ -24,6 +27,12 @@ try {
             }
         } finally { $view.Close() }
     }
+    $view = $db.OpenView('SELECT `DefaultDir` FROM `Directory` WHERE `Directory` = ''INSTALLFOLDER''')
+    try {
+        $view.Execute()
+        $record = $view.Fetch()
+        if ($null -eq $record -or ($record.StringData(1) -split '\|')[-1] -ne 'Transflux') { throw 'Unexpected install directory' }
+    } finally { $view.Close() }
 } finally {
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($db)
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($installer)

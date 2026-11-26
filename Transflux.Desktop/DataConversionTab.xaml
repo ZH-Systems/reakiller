@@ -1,4 +1,4 @@
-<UserControl x:Class="ReaKiller.Desktop.DataConversionTab"
+<UserControl x:Class="Transflux.Desktop.DataConversionTab"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop">

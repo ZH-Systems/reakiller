@@ -9,7 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Navigation;
 using MessageBox = System.Windows.MessageBox;
 
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 
 public partial class PdfCompressionTab : System.Windows.Controls.UserControl
 {
@@ -191,7 +191,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                 return new PdfJobResult(displayName, beforeText, afterText, "Skipped (exists)");
 
             Directory.CreateDirectory(outputDirectory);
-            temp = Path.Combine(outputDirectory, ".reakiller-" + Guid.NewGuid().ToString("N") + ".pdf");
+            temp = Path.Combine(outputDirectory, ".transflux-" + Guid.NewGuid().ToString("N") + ".pdf");
             var start = new ProcessStartInfo(gs)
             {
                 UseShellExecute = false,
@@ -263,7 +263,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             {
                 // Same-directory temp ensures File.Replace runs on the same volume.
                 // File.Replace preserves the original in a distinct rollback backup.
-                backup = source + ".reakiller-backup-" + Guid.NewGuid().ToString("N") + ".pdf";
+                backup = source + ".transflux-backup-" + Guid.NewGuid().ToString("N") + ".pdf";
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Replace(temp, source, backup, ignoreMetadataErrors: false);
                 temp = null;

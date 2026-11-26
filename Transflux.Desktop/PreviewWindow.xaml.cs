@@ -2,7 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
-namespace ReaKiller.Desktop;
+namespace Transflux.Desktop;
 
 public partial class PreviewWindow : Window
 {
