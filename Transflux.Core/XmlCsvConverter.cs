@@ -71,7 +71,7 @@ public sealed class XmlCsvConverter(string? recordPath = null, IReadOnlyList<str
             var list = group.ToList();
             for (var i = 0; i < list.Count; i++)
             {
-                var key = Name(group.Key) + (list.Count > 1 ? "[" + (i + 1) + "]" : "");
+                var key = Name(group.Key) + (i > 0 ? "[" + (i + 1) + "]" : "");
                 Flatten(list[i], prefix + key + ".", row, token);
             }
         }
