@@ -89,14 +89,18 @@ public sealed class XmlCsvConverter(string? recordPath = null, IReadOnlyList<str
         var known = new HashSet<string>(headers, StringComparer.Ordinal);
         if (known.Count != headers.Count) throw new ArgumentException("Duplicate selected columns.");
         var count = 0;
+        var observed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in Rows(source, cancellationToken))
         {
             count++;
+            if (columns is not null) observed.UnionWith(row.Keys);
             if (columns is null)
                 foreach (var key in row.Keys)
                     if (known.Add(key)) headers.Add(key);
         }
         if (count == 0 || headers.Count == 0) throw new InvalidDataException("No matching XML records or columns.");
+        if (columns is not null && headers.Any(h => !observed.Contains(h)))
+            throw new InvalidDataException("One or more selected columns were not found.");
         await using var writer = new StreamWriter(temporaryOutput, false, new UTF8Encoding(false));
         await writer.WriteLineAsync(Line(headers).AsMemory(), cancellationToken);
         foreach (var row in Rows(source, cancellationToken))
