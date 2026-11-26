@@ -23,6 +23,8 @@ public static class ConversionPlanner
             throw new ArgumentException("Destination must be outside the source directory.");
         if (File.Exists(destination)) throw new IOException("Destination is a file.");
         var extensions = new HashSet<string>(converter.SourceExtensions, StringComparer.OrdinalIgnoreCase);
+        if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("Source reparse points are not supported.");
         var options = new EnumerationOptions { RecurseSubdirectories = job.Recursive,
             AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false };
         IEnumerable<string> candidates = directory ? Directory.EnumerateFiles(source, "*", options) : new[] { source };
@@ -37,6 +39,7 @@ public static class ConversionPlanner
             if (!Inside(output, destination) || string.Equals(file, output, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Unsafe output path.");
             if (!seen.Add(output)) throw new IOException("Multiple inputs resolve to the same output: " + output);
+            if (items.Count >= 250000) throw new InvalidDataException("Job exceeds 250,000 input files; split into smaller batches.");
             items.Add(new ConversionItem(file, output));
         }
         cancellationToken.ThrowIfCancellationRequested();

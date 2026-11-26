@@ -30,8 +30,11 @@ internal sealed class OcrTools(OcrConfiguration config)
         start.Environment["OMP_THREAD_LIMIT"] = "1";
         start.Environment["TEMP"] = directory;
         start.Environment["TMP"] = directory;
+        using var containment = OperatingSystem.IsWindows() ? WindowsProcessJob.Create(768L * 1024 * 1024, 2) : null;
         using var p = Process.Start(start) ?? throw new IOException("OCR process failed to start.");
-        var stdout = version ? p.StandardOutput.ReadLineAsync() : Drain(p.StandardOutput.BaseStream);
+        try { containment?.Assign(p); }
+        catch { if (!p.HasExited) p.Kill(entireProcessTree: true); await p.WaitForExitAsync(); throw; }
+        var stdout = version ? ReadVersion(p.StandardOutput) : Drain(p.StandardOutput.BaseStream);
         var stderr = p.StandardError.BaseStream.CopyToAsync(Stream.Null);
         var timer = Stopwatch.StartNew();
         try
@@ -50,9 +53,19 @@ internal sealed class OcrTools(OcrConfiguration config)
         finally
         {
             if (!p.HasExited) p.Kill(entireProcessTree: true);
+            containment?.Dispose();
             await p.WaitForExitAsync();
-            await stderr;
+            await Task.WhenAll(stdout, stderr);
         }
+    }
+    private static async Task<string?> ReadVersion(StreamReader reader)
+    {
+        var buffer = new char[1024];
+        var result = new System.Text.StringBuilder();
+        int n;
+        while ((n = await reader.ReadAsync(buffer.AsMemory())) > 0)
+            if (result.Length < 4096) result.Append(buffer, 0, Math.Min(n, 4096 - result.Length));
+        return result.ToString().Split('\n')[0].Trim();
     }
     private static async Task<string?> Drain(Stream stream)
     { await stream.CopyToAsync(Stream.Null); return null; }
