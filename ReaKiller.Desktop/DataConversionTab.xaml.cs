@@ -220,7 +220,10 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             Status.Text = preview ? "Extracting preview..." : "Converting...";
             PreviewGrid.ItemsSource = null;
             Log.Clear();
+            using var containment = WindowsProcessJob.Create(5L * 1024 * 1024 * 1024, 20);
             using var process = Process.Start(start) ?? throw new IOException("Unable to start conversion.");
+            try { containment.Assign(process); }
+            catch { if (!process.HasExited) process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); throw; }
             // Drain both streams concurrently; retain only bounded preview text, not document logs.
             var stdout = ReadBounded(process.StandardOutput, preview ? 4 * 1024 * 1024 : 0, token);
             var stderr = ReadBounded(process.StandardError, 0, token);
@@ -249,6 +252,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             finally
             {
                 if (!process.HasExited) process.Kill(entireProcessTree: true);
+                containment.Dispose();
                 await process.WaitForExitAsync();
                 try { await Task.WhenAll(stdout, stderr); } catch (OperationCanceledException) { } catch (InvalidDataException) { }
             }
