@@ -41,7 +41,8 @@ internal static class UpdateService
         using var memory = new MemoryStream();
         var buffer = new byte[8192];
         int n;
-        while ((n = await stream.ReadAsync(buffer)) > 0)
+        using var deadline = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
+        while ((n = await stream.ReadAsync(buffer.AsMemory(), deadline.Token)) > 0)
         {
             if (memory.Length + n > max) throw new InvalidDataException("Update response exceeds limit.");
             memory.Write(buffer, 0, n);
@@ -101,6 +102,9 @@ internal static class UpdateService
         var updater = Path.Combine(AppContext.BaseDirectory, "ReaKiller.Updater.exe");
         if (!File.Exists(updater)) throw new FileNotFoundException("The update helper is missing.", updater);
         var directory = Directory.CreateTempSubdirectory("transflux-update-").FullName;
+        bool launched = false;
+        try
+        {
         var msi = Path.Combine(directory, "ReaKiller-win-x64.msi");
         using var checksumResponse = await GetAsset(update.ShaUrl);
         var expectedText = System.Text.Encoding.UTF8.GetString(await ReadLimited(checksumResponse, 4096));
@@ -135,7 +139,13 @@ internal static class UpdateService
         var start = new ProcessStartInfo(stagedUpdater) { UseShellExecute = false, WorkingDirectory = directory };
         foreach (var arg in new[] { "--install", msi, sha, Environment.ProcessId.ToString() })
             start.ArgumentList.Add(arg);
-        Process.Start(start);
+        using var process = Process.Start(start) ?? throw new IOException("Unable to launch update helper.");
+        launched = true;
         System.Windows.Application.Current.Shutdown();
+        }
+        finally
+        {
+            if (!launched) { try { Directory.Delete(directory, true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+        }
     }
 }
