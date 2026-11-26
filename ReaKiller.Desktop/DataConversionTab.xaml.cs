@@ -12,7 +12,7 @@ namespace ReaKiller.Desktop;
 public partial class DataConversionTab : System.Windows.Controls.UserControl
 {
     private CancellationTokenSource? stop;
-    public bool IsBusy => stop is not null;
+    public bool IsBusy => stop is not null || draining;
     private QueueStore? store;
     private List<QueueJob> jobs = new();
     private bool paused = true;
@@ -54,13 +54,15 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
     }
     private async Task DrainQueue()
     {
-        if (draining || IsBusy || paused || store is null) return;
+        if (draining || stop is not null || paused || store is null) return;
         draining = true;
         try
         {
             while (!paused && jobs.FirstOrDefault(j => j.State == QueueState.Pending) is QueueJob job)
             {
                 // Never silently run a recovered queue: resume is explicit after startup.
+                if (job.Arguments.Contains("--overwrite") && System.Windows.MessageBox.Show("This queued job permits replacing existing CSV files. Continue?", "Confirm overwrite", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                { Change(job with { State = QueueState.Cancelled, Updated = DateTimeOffset.UtcNow }); continue; }
                 job.Validate();
                 var running = job with { State = QueueState.Running, Attempts = job.Attempts + 1, Updated = DateTimeOffset.UtcNow };
                 Change(running);
@@ -138,8 +140,8 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
     private static IEnumerable<string> Lines(string s) => s.Split(new[] {'\r','\n'}, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     private async void PreviewClick(object sender, RoutedEventArgs e) => await Execute(true);
     private async void RunClick(object sender, RoutedEventArgs e) => await Execute(false);
-    private void StopClick(object sender, RoutedEventArgs e) => stop?.Cancel();
-    public void Cancel() => stop?.Cancel();
+    private void StopClick(object sender, RoutedEventArgs e) { paused = true; stop?.Cancel(); }
+    public void Cancel() { paused = true; stop?.Cancel(); }
 
     private async Task Execute(bool preview)
     {
