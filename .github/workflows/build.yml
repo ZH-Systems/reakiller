@@ -85,6 +85,11 @@ jobs:
           Copy-Item desktop/* bundle/ -Recurse -Force
           Copy-Item publish/* bundle/ -Recurse -Force
           Copy-Item updater/* bundle/ -Recurse -Force
+          foreach ($name in @('Transflux.exe','Transflux.Desktop.exe','Transflux.Updater.exe')) {
+            $file = Get-Item -LiteralPath (Join-Path bundle $name)
+            if ($file.VersionInfo.ProductName -ne 'Transflux') { throw "Incorrect product identity: $name" }
+          }
+          if (Get-ChildItem bundle -Recurse -File | Where-Object Name -Match '(?i)reakiller|reaconverter') { throw 'Legacy artifact in bundle' }
       - name: Install WiX
         run: dotnet tool install --global wix --version 4.0.6
       - name: Build MSI

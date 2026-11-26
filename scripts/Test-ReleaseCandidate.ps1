@@ -27,6 +27,12 @@ try {
             }
         } finally { $view.Close() }
     }
+    $view = $db.OpenView('SELECT `DefaultDir` FROM `Directory` WHERE `Directory` = ''INSTALLFOLDER''')
+    try {
+        $view.Execute()
+        $record = $view.Fetch()
+        if ($null -eq $record -or ($record.StringData(1) -split '\|')[-1] -ne 'Transflux') { throw 'Unexpected install directory' }
+    } finally { $view.Close() }
 } finally {
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($db)
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($installer)

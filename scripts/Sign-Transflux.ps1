@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $subject = "CN=ZH-Systems"
 $bundle = (Resolve-Path $BundlePath).Path
-$names = @("Transflux.exe", "Transflux.Desktop.exe")
+$names = @("Transflux.exe", "Transflux.Desktop.exe", "Transflux.Updater.exe")
 foreach ($name in $names) {
     if (-not (Test-Path (Join-Path $bundle $name) -PathType Leaf)) {
         throw "Missing $name in $bundle. Download and extract the full desktop artifact first."
@@ -54,5 +54,5 @@ foreach ($name in $names) {
         throw "Signature verification found an unexpected certificate on $name."
     }
 }
-Write-Host "Both files signed by $subject ($($cert.Thumbprint))."
+Write-Host "All executables signed by $subject ($($cert.Thumbprint))."
 Write-Warning "Other PCs will not trust this certificate automatically. Self-signing does not build public SmartScreen reputation."

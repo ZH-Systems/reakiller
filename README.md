@@ -130,7 +130,7 @@ With selected files, non-in-place outputs go directly into the chosen output dir
 
 ## Free self-signed ZH-Systems Windows executables
 
-The repository includes `scripts/Sign-Transflux.ps1` to sign both published Windows executables locally, without Azure or a paid certificate.
+The repository includes `scripts/Sign-Transflux.ps1` to sign all three published Windows executables locally, without Azure or a paid certificate.
 
 1. Download and extract the `Transflux-Desktop-win-x64` artifact from GitHub Actions onto the Windows PC where you want to sign. Do not sign inside an archive.
 2. From PowerShell, run:
@@ -139,7 +139,7 @@ The repository includes `scripts/Sign-Transflux.ps1` to sign both published Wind
 .\scripts\Sign-Transflux.ps1 -BundlePath "C:\Transflux" -CreateCertificate
 ```
 
-The script creates a non-exportable RSA 3072-bit SHA-256 code-signing certificate named `CN=ZH-Systems` in your **CurrentUser Personal** certificate store, signs `Transflux.exe` and `Transflux.Desktop.exe`, and exports only the **public** certificate (`ZH-Systems-Public-CodeSigning.cer`) to the bundle. On subsequent releases, run the same command without `-CreateCertificate` to reuse the certificate.
+The script creates a non-exportable RSA 3072-bit SHA-256 code-signing certificate named `CN=ZH-Systems` in your **CurrentUser Personal** certificate store, signs `Transflux.exe`, `Transflux.Desktop.exe` and `Transflux.Updater.exe`, and exports only the **public** certificate (`ZH-Systems-Public-CodeSigning.cer`) to the bundle. On subsequent releases, run the same command without `-CreateCertificate` to reuse the certificate.
 
 To trust this certificate on **your own Windows user profile**, you can use the interactive `-TrustOnThisMachine` flag. It asks for explicit confirmation before importing the public certificate into CurrentUser Trusted Root and Trusted Publishers. Trusting your own self-signed root should only be done on machines you control. For another trusted device, securely confirm the public certificate fingerprint out of band before installing that `.cer` file to the appropriate stores.
 
