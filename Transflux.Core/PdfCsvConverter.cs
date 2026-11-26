@@ -8,7 +8,7 @@ public sealed record PdfCsvOptions(int FirstPage = 1, int? LastPage = null,
     bool RemoveRepeatedHeaders = true, IReadOnlyList<double>? ColumnBoundaries = null,
     IReadOnlyList<string>? Headers = null);
 
-public sealed class PdfCsvConverter(PdfCsvOptions? options = null) : IFileConverter
+public sealed class PdfCsvConverter(PdfCsvOptions? options = null, Func<string, int, double, double, IReadOnlyList<OcrWord>>? ocr = null) : IFileConverter
 {
     private readonly PdfCsvOptions settings = options ?? new();
     public ConversionOperation Operation => ConversionOperation.PdfToCsv;
@@ -34,12 +34,17 @@ public sealed class PdfCsvConverter(PdfCsvOptions? options = null) : IFileConver
         for (var number = settings.FirstPage; number <= last; number++)
         {
             token.ThrowIfCancellationRequested();
-            var words = document.GetPage(number).GetWords()
+            var page = document.GetPage(number);
+            var words = page.GetWords()
                 .Where(w => !string.IsNullOrWhiteSpace(w.Text))
                 .Select(w => new PositionedWord(w.Text, (double)w.BoundingBox.Left,
                     (double)w.BoundingBox.Right, (double)w.BoundingBox.Bottom))
                 .Take(200001).OrderByDescending(w => w.Y).ThenBy(w => w.Left).ToArray();
             if (words.Length > 200000) throw new InvalidDataException("Page exceeds word limit.");
+            if (words.Length == 0 && ocr is not null)
+                words = ocr(source, number, (double)page.Width, (double)page.Height)
+                    .Select(w => new PositionedWord(w.Text, w.Left, w.Right, w.Y))
+                    .OrderByDescending(w => w.Y).ThenBy(w => w.Left).ToArray();
             if (words.Length == 0)
                 throw new InvalidDataException($"Page {number} has no extractable text. OCR is required.");
             var index = 0;

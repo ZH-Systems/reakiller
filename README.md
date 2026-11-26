@@ -232,3 +232,15 @@ Limitations: this is heuristic extraction of a single consistently formatted tab
 ### PDF extraction security
 
 CLI conversion and preview launch a separate process for each PDF, using argument lists rather than shell interpolation. Workers reject elevated Windows administrator tokens, cap input at 256 MiB, document pages at 5,000, and extracted words per page at 200,000. Parent monitors a five-minute deadline, approximately 1 GiB private memory and 256 MiB output, with a 512 MiB managed heap budget and at most four concurrent workers. Preview output is capped at 4 MiB. Limits monitored by polling are not hard OS quotas; the worker is not a filesystem or network sandbox and runs as the invoking user. Direct PdfCsvConverter calls are not isolated; production callers must use the isolated CLI path. Do not process untrusted documents as administrator. Document content is not sent to external services. Preview intentionally returns extracted data to the calling terminal; use only in a trusted environment.
+
+## Local OCR (experimental, explicit opt-in)
+
+Install reviewed Ghostscript 10.08.0 and Tesseract 5.5.4 distributions separately. Use trusted, administrator-protected installation directories and verify distribution provenance, native DLLs and language data before approving hashes. The application checks exact executable versions and configured SHA-256 values, but hashes supplied by the user are not independent authenticity evidence. Do not use arbitrary downloaded binaries or untrusted configuration files.
+
+Create a trusted JSON configuration with properties Ghostscript, GhostscriptSha256, Tesseract, TesseractSha256, Tessdata, EnglishDataSha256 and MinimumConfidence (default 80). Paths must be absolute, hashes must be 64 hexadecimal characters, and Tessdata must contain eng.traineddata. Run:
+
+```powershell
+ReaKiller.exe pdf-to-csv "D:\Reports\Scan.pdf" --output "D:\CSV" --ocr-config "C:\Trusted\ocr.json"
+```
+
+OCR only runs on pages without extractable native words. English recognition, 300 DPI, one concurrent worker, per-tool 90-second timeout, parent five-minute deadline, 64 MiB intermediate file cap and 768 MiB monitored child memory are used. Any word below the configured confidence threshold rejects the page rather than silently substituting uncertain data. Confidence is not a guarantee of correctness. Native text and OCR share the positional table algorithm. Temporary images and TSV files are deleted on normal completion/failure; abrupt worker termination may leave sensitive files in the current user's temporary directory. Restrict access to that directory and clean abandoned transflux-ocr-* folders. No network service is used; process isolation is not a network/filesystem sandbox. Hard resource quotas, native dependency attestation and full scanned PDF integration testing are release blockers.
