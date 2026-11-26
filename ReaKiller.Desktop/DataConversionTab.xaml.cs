@@ -24,11 +24,12 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
         catch { store?.Dispose(); store = null; QueueStatus.Text = "Queue unavailable. Existing storage was not reset."; }
     }
     public void CloseQueue() { store?.Dispose(); store = null; }
+    private ConversionSummary? lastSummary;
     private void RefreshQueue()
     {
         QueueList.ItemsSource = null;
         QueueList.ItemsSource = jobs.Select(j => new QueueDisplay(j.Id, j.Operation, j.State, j.Attempts, j.Created)).ToList();
-        QueueStatus.Text = paused ? "Queue paused" : "Queue enabled";
+        QueueStatus.Text = (paused ? "Queue paused" : "Queue enabled") + $" | {jobs.Count(j => j.State == QueueState.Pending)} pending, {jobs.Count(j => j.State == QueueState.Completed)} completed, {jobs.Count(j => j.State is QueueState.Failed or QueueState.Interrupted)} require review";
     }
     private sealed record QueueDisplay(Guid Id, string Operation, QueueState State, int Attempts, DateTimeOffset Created);
     private void Persist(List<QueueJob> next)
@@ -72,6 +73,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
                     var exe = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
                     var start = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
                     foreach (var arg in running.Arguments) start.ArgumentList.Add(arg);
+                    start.ArgumentList.Add("--summary-json");
                     // Reconfirm OCR every execution because its configuration may have changed.
                     if (running.Arguments.Contains("--ocr-config") &&
                         System.Windows.MessageBox.Show("Run queued OCR using the previously selected trusted configuration?", "Confirm OCR", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
@@ -96,7 +98,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
         if (PdfSettings is null || XmlSettings is null || PreviewButton is null || Source is null || PreviewGrid is null) return;
         PdfSettings.Visibility = Pdf ? Visibility.Visible : Visibility.Collapsed;
         XmlSettings.Visibility = Pdf ? Visibility.Collapsed : Visibility.Visible;
-        PreviewButton.IsEnabled = Pdf;
+        PreviewButton.IsEnabled = true;
         Source.Clear();
         PreviewGrid.ItemsSource = null;
     }
@@ -153,7 +155,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             if (!Directory.Exists(source) && !File.Exists(source)) throw new ArgumentException("Select an existing source.");
             if (File.Exists(source) && !Path.GetExtension(source).Equals(Pdf ? ".pdf" : ".xml", StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("Source does not match the selected operation.");
-            if (preview && (!Pdf || !File.Exists(source))) throw new ArgumentException("Preview requires one PDF.");
+            if (preview && !File.Exists(source)) throw new ArgumentException("Preview requires one file.");
             if (!int.TryParse(Workers.Text, out var workers) || workers < 1 || workers > (Pdf ? 4 : 16))
                 throw new ArgumentException("Invalid worker count.");
             var executable = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
@@ -220,18 +222,25 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             Status.Text = preview ? "Extracting preview..." : "Converting...";
             PreviewGrid.ItemsSource = null;
             Log.Clear();
+            if (!preview) lastSummary = null;
             using var containment = WindowsProcessJob.Create(5L * 1024 * 1024 * 1024, 20);
             using var process = Process.Start(start) ?? throw new IOException("Unable to start conversion.");
             try { containment.Assign(process); }
             catch { if (!process.HasExited) process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); throw; }
             // Drain both streams concurrently; retain only bounded preview text, not document logs.
-            var stdout = ReadBounded(process.StandardOutput, preview ? 4 * 1024 * 1024 : 0, token);
+            var stdout = ReadBounded(process.StandardOutput, preview ? 4 * 1024 * 1024 : 4096, token);
             var stderr = ReadBounded(process.StandardError, 0, token);
             try
             {
                 await process.WaitForExitAsync(token);
                 var data = await stdout;
                 await stderr;
+                if (!preview && process.ExitCode is 0 or 1)
+                {
+                    lastSummary = JsonSerializer.Deserialize<ConversionSummary>(data) ?? throw new InvalidDataException("Missing conversion summary.");
+                    lastSummary.Validate();
+                    Log.Text = $"Succeeded: {lastSummary.Succeeded} | Skipped: {lastSummary.Skipped} | Failed: {lastSummary.Failed}";
+                }
                 if (process.ExitCode != 0) throw new IOException("Conversion failed (exit " + process.ExitCode + "). Use CLI diagnostics if needed.");
                 if (preview)
                 {
@@ -247,7 +256,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
                     PreviewGrid.ItemsSource = table.DefaultView;
                 }
                 Status.Text = preview ? "Preview ready. Verify against the source." : "Conversion complete.";
-                Log.Text = Status.Text;
+                if (preview) Log.Text = Status.Text;
             }
             finally
             {
@@ -266,6 +275,56 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             PreviewButton.IsEnabled = Pdf;
             StopButton.IsEnabled = Activity.IsIndeterminate = false;
         }
+    }
+    private void SaveDataPreset(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var preset = new DataPreset(1, Pdf, Recursive.IsChecked == true, int.Parse(Workers.Text),
+                RecordPath.Text, XmlColumns.Text, FirstPage.Text, LastPage.Text, Boundaries.Text,
+                PdfHeaders.Text, KeepHeaders.IsChecked == true);
+            preset.Validate();
+            var picker = new Microsoft.Win32.SaveFileDialog { Filter = "Transflux preset|*.json", DefaultExt = ".json" };
+            if (picker.ShowDialog() != true) return;
+            // Presets contain only mapping settings; no paths, OCR configuration, or overwrite consent.
+            File.WriteAllText(picker.FileName, JsonSerializer.Serialize(preset, new JsonSerializerOptions { WriteIndented = true }));
+            Status.Text = "Preset saved. Mapping labels may contain sensitive information; share only reviewed presets.";
+        }
+        catch { Status.Text = "Unable to save preset. Verify settings."; }
+    }
+    private void LoadDataPreset(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new Microsoft.Win32.OpenFileDialog { Filter = "Transflux preset|*.json" };
+            if (picker.ShowDialog() != true) return;
+            using var stream = new FileStream(picker.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (stream.Length > 256 * 1024) throw new InvalidDataException("Preset too large.");
+            var preset = JsonSerializer.Deserialize<DataPreset>(stream) ?? throw new InvalidDataException("Invalid preset.");
+            preset.Validate();
+            Mode.SelectedIndex = preset.Pdf ? 1 : 0;
+            Recursive.IsChecked = preset.Recursive;
+            Workers.Text = preset.Workers.ToString();
+            RecordPath.Text = preset.RecordPath; XmlColumns.Text = preset.XmlColumns;
+            FirstPage.Text = preset.FirstPage; LastPage.Text = preset.LastPage;
+            Boundaries.Text = preset.Boundaries; PdfHeaders.Text = preset.PdfHeaders;
+            KeepHeaders.IsChecked = preset.KeepHeaders;
+            Overwrite.IsChecked = false; OcrConfig.Clear(); Source.Clear(); Destination.Clear();
+            PreviewGrid.ItemsSource = null;
+            Status.Text = "Preset loaded. Select source and destination.";
+        }
+        catch { Status.Text = "Unable to load preset. File is invalid or inaccessible."; }
+    }
+    private void ExportSummary(object sender, RoutedEventArgs e)
+    {
+        if (lastSummary is null) { Status.Text = "No completed conversion summary available."; return; }
+        try
+        {
+            var picker = new Microsoft.Win32.SaveFileDialog { Filter = "JSON summary|*.json", DefaultExt = ".json" };
+            if (picker.ShowDialog() == true)
+                File.WriteAllText(picker.FileName, JsonSerializer.Serialize(lastSummary, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch { Status.Text = "Unable to export summary."; }
     }
     private static async Task<string> ReadBounded(StreamReader reader, int limit, CancellationToken token)
     {
