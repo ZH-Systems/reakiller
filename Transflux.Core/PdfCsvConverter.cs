@@ -25,7 +25,9 @@ public sealed class PdfCsvConverter(PdfCsvOptions? options = null) : IFileConver
         if (boundaries is not null && (boundaries.Any(x => !double.IsFinite(x) || x <= 0) ||
             !boundaries.SequenceEqual(boundaries.Distinct().OrderBy(x => x))))
             throw new ArgumentException("Column boundaries must be positive, distinct and ascending.");
+        if (new FileInfo(source).Length > 256L * 1024 * 1024) throw new InvalidDataException("PDF exceeds input limit.");
         using var document = PdfDocument.Open(source);
+        if (document.NumberOfPages > 5000) throw new InvalidDataException("PDF exceeds page limit.");
         var last = settings.LastPage ?? document.NumberOfPages;
         if (settings.FirstPage < 1 || last < settings.FirstPage || last > document.NumberOfPages)
             throw new ArgumentException("Invalid PDF page range.");
@@ -36,7 +38,8 @@ public sealed class PdfCsvConverter(PdfCsvOptions? options = null) : IFileConver
                 .Where(w => !string.IsNullOrWhiteSpace(w.Text))
                 .Select(w => new PositionedWord(w.Text, (double)w.BoundingBox.Left,
                     (double)w.BoundingBox.Right, (double)w.BoundingBox.Bottom))
-                .OrderByDescending(w => w.Y).ThenBy(w => w.Left).ToArray();
+                .Take(200001).OrderByDescending(w => w.Y).ThenBy(w => w.Left).ToArray();
+            if (words.Length > 200000) throw new InvalidDataException("Page exceeds word limit.");
             if (words.Length == 0)
                 throw new InvalidDataException($"Page {number} has no extractable text. OCR is required.");
             var index = 0;
