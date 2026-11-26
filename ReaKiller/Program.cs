@@ -39,6 +39,9 @@ public static class ReaKiller
         if (args.Length > 0 && args[0].Equals("xml-to-csv", StringComparison.OrdinalIgnoreCase))
             return await XmlCsvCommand.RunAsync(args);
 
+        if (args.Length > 0 && args[0] == "--internal-pdf-worker")
+            return await IsolatedPdfConverter.WorkerAsync(args);
+
         if (args.Length > 0 && args[0].Equals("pdf-to-csv", StringComparison.OrdinalIgnoreCase))
             return await PdfCsvCommand.RunAsync(args);
 
