@@ -8,7 +8,7 @@ internal static class PdfCsvCommand
     {
         if (args.Length == 1 || args.Contains("--help") || args.Contains("-h"))
         {
-            Console.WriteLine("pdf-to-csv <file-or-folder> --output <folder> [--first-page N] [--last-page N] [--row-tolerance N] [--column-gap N] [--boundary X] [--header NAME] [--keep-headers] [--recursive] [--overwrite] [--threads N] [--preview] [--ocr-config <json>]");
+            Console.WriteLine("pdf-to-csv <file-or-folder> --output <folder> [--first-page N] [--last-page N] [--row-tolerance N] [--column-gap N] [--boundary X] [--header NAME] [--keep-headers] [--recursive] [--overwrite] [--threads N] [--preview] [--summary-json] [--ocr-config <json>]");
             return args.Length == 1 ? 2 : 0;
         }
         using var cancellation = new CancellationTokenSource();
@@ -20,7 +20,7 @@ internal static class PdfCsvCommand
             int first = 1, workers = 1;
             int? last = null;
             double tolerance = 3, gap = 12;
-            bool recursive = false, overwrite = false, repeated = true, preview = false;
+            bool recursive = false, overwrite = false, repeated = true, preview = false, summary = false;
             var boundaries = new List<double>();
             var headers = new List<string>();
             for (int i = 2; i < args.Length; i++)
@@ -31,6 +31,7 @@ internal static class PdfCsvCommand
                 switch (args[i])
                 {
                     case "--ocr-config": ocrConfig = Value(); break;
+                    case "--summary-json": summary = true; break;
                     case "--output": output = Value(); break;
                     case "--first-page": first = Integer(); break;
                     case "--last-page": last = Integer(); break;
@@ -66,7 +67,8 @@ internal static class PdfCsvCommand
             var job = new ConversionJob(ConversionOperation.PdfToCsv, args[1], output, recursive,
                 overwrite ? ExistingOutputPolicy.Overwrite : ExistingOutputPolicy.Skip, Workers: workers);
             var results = await ConversionRunner.RunAsync(job, converter, cancellationToken: cancellation.Token);
-            foreach (var result in results)
+            if (summary) Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(ConversionSummary.From(results)));
+            else foreach (var result in results)
                 Console.WriteLine($"{result.Status}: {result.Item.Source} -> {result.Item.Destination} {result.Error}");
             return results.Any(r => r.Status == ConversionStatus.Failed) ? 1 : 0;
         }
