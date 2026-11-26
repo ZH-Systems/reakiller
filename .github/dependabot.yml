@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - /ReaKiller
+      - /ReaKiller.Desktop
+      - /ReaKiller.Updater
+      - /ReaKiller.Tests
+      - /Transflux.Core
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
