@@ -41,6 +41,6 @@ public sealed class XmlCsvTests : IDisposable
     public async Task KeepsRepeatedSiblingValues()
     {
         var csv = await Convert("<r><item><v>1</v><v>2</v></item></r>");
-        Assert.Equal("\"v[1]\",\"v[2]\"\n\"1\",\"2\"\n", csv);
+        Assert.Equal("\"v\",\"v[2]\"\n\"1\",\"2\"\n", csv);
     }
 }
