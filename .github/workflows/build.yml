@@ -94,6 +94,9 @@ jobs:
           ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
           wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
           if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
+      - name: Validate release candidate
+        shell: pwsh
+        run: ./scripts/Test-ReleaseCandidate.ps1 -Executable ./publish/ReaKiller.exe -Msi ./installers/ReaKiller-win-x64.msi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ReaKiller-MSI-win-x64
