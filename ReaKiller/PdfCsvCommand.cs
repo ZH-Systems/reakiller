@@ -8,7 +8,7 @@ internal static class PdfCsvCommand
     {
         if (args.Length == 1 || args.Contains("--help") || args.Contains("-h"))
         {
-            Console.WriteLine("pdf-to-csv <file-or-folder> --output <folder> [--first-page N] [--last-page N] [--row-tolerance N] [--column-gap N] [--boundary X] [--header NAME] [--keep-headers] [--recursive] [--overwrite] [--threads N] [--preview]");
+            Console.WriteLine("pdf-to-csv <file-or-folder> --output <folder> [--first-page N] [--last-page N] [--row-tolerance N] [--column-gap N] [--boundary X] [--header NAME] [--keep-headers] [--recursive] [--overwrite] [--threads N] [--preview] [--ocr-config <json>]");
             return args.Length == 1 ? 2 : 0;
         }
         using var cancellation = new CancellationTokenSource();
@@ -16,7 +16,7 @@ internal static class PdfCsvCommand
         Console.CancelKeyPress += handler;
         try
         {
-            string? output = null;
+            string? output = null, ocrConfig = null;
             int first = 1, workers = 1;
             int? last = null;
             double tolerance = 3, gap = 12;
@@ -30,6 +30,7 @@ internal static class PdfCsvCommand
                 double Number() => double.Parse(Value(), CultureInfo.InvariantCulture);
                 switch (args[i])
                 {
+                    case "--ocr-config": ocrConfig = Value(); break;
                     case "--output": output = Value(); break;
                     case "--first-page": first = Integer(); break;
                     case "--last-page": last = Integer(); break;
@@ -46,8 +47,15 @@ internal static class PdfCsvCommand
                 }
             }
             if (workers < 1 || workers > 4) throw new ArgumentException("PDF workers must be between 1 and 4.");
+            OcrConfiguration? ocr = null;
+            if (ocrConfig is not null)
+            {
+                if (new FileInfo(ocrConfig).Length > 65536) throw new InvalidDataException("OCR configuration too large.");
+                ocr = JsonSerializer.Deserialize<OcrConfiguration>(File.ReadAllText(ocrConfig)) ?? throw new InvalidDataException("Invalid OCR configuration.");
+                if (workers != 1) throw new ArgumentException("OCR requires one worker.");
+            }
             var converter = new IsolatedPdfConverter(new PdfCsvOptions(first, last, tolerance, gap, repeated,
-                boundaries.Count == 0 ? null : boundaries, headers.Count == 0 ? null : headers));
+                boundaries.Count == 0 ? null : boundaries, headers.Count == 0 ? null : headers), ocr);
             if (preview)
             {
                 if (!File.Exists(args[1])) throw new ArgumentException("Preview requires a single PDF.");
