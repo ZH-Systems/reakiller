@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Transflux.Core;
+using System.Security.Principal;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,25 +29,15 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
 
     private static string? FindGhostscript()
     {
-        var paths = new List<string>();
-        foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
+        // Never search PATH or user-writable directories for native executables.
+        var root = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var candidate = Path.Combine(root, "gs", "gs10.08.0", "bin", "gswin64c.exe");
+        if (!File.Exists(candidate)) return null;
+        for (var path = candidate; !string.Equals(path, root, StringComparison.OrdinalIgnoreCase); path = Path.GetDirectoryName(path)!)
         {
-            var gsRoot = Path.Combine(root, "gs");
-            if (Directory.Exists(gsRoot))
-                paths.AddRange(Directory.EnumerateFiles(gsRoot, "gswin64c.exe", SearchOption.AllDirectories));
+            if (string.IsNullOrEmpty(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return null;
         }
-        var env = Environment.GetEnvironmentVariable("PATH") ?? "";
-        foreach (var dir in env.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            try
-            {
-                var file = Path.Combine(dir.Trim('"'), "gswin64c.exe");
-                if (File.Exists(file)) paths.Add(file);
-            }
-            catch (ArgumentException) { }
-        }
-        return paths.OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+        return candidate;
     }
 
     private void CheckEngine()
@@ -54,7 +46,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
         {
             var executable = FindGhostscript();
             EngineStatus.Text = executable is null
-                ? "Ghostscript not detected. Install Ghostscript for Windows before compressing PDFs."
+                ? "Ghostscript not detected. Install reviewed Ghostscript 10.08.0 under Program Files before compressing PDFs."
                 : "Ready: " + executable;
         }
         catch (Exception ex) { EngineStatus.Text = "Ghostscript check failed: " + ex.Message; }
@@ -176,6 +168,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
         string? temp = null;
         string? backup = null;
         Process? process = null;
+        WindowsProcessJob? containment = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -185,6 +178,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             var sourceAccessedUtc = File.GetLastAccessTimeUtc(source);
             var before = new FileInfo(source).Length;
             beforeText = Size(before);
+            if (before > 512L * 1024 * 1024) throw new InvalidDataException("PDF exceeds compression input limit.");
 
             var relativeDirectory = sourceFolder is null
                 ? string.Empty
@@ -207,22 +201,29 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
             };
             foreach (var arg in new[]
             {
-                "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dQUIET", "-sDEVICE=pdfwrite",
+                "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dQUIET", "-dPDFSTOPONERROR", "-sDEVICE=pdfwrite",
                 "-dCompatibilityLevel=1.6", "-dDetectDuplicateImages=true",
                 "-dCompressFonts=true", "-dSubsetFonts=true",
-                "-dPDFSETTINGS=/" + preset, "-sOutputFile=" + temp, source
+                "-dPDFSETTINGS=/" + preset, "-sOutputFile=" + temp, "-f", Path.GetFullPath(source)
             }) start.ArgumentList.Add(arg);
 
+            foreach (var key in new[] { "GS_OPTIONS", "GS_LIB", "GS_FONTPATH" }) start.Environment.Remove(key);
+            start.WorkingDirectory = Path.GetDirectoryName(gs)!;
+            containment = WindowsProcessJob.Create(1024L * 1024 * 1024, 2);
             process = new Process { StartInfo = start };
             cancellationToken.ThrowIfCancellationRequested();
             if (!process.Start()) throw new IOException("Unable to start Ghostscript.");
+            try { containment.Assign(process); }
+            catch { if (!process.HasExited) process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); throw; }
             _activeProcesses[process.Id] = process;
             // Drain redirected streams in parallel to avoid blocking on full pipe buffers.
-            var stdout = process.StandardOutput.ReadToEndAsync();
-            var stderr = process.StandardError.ReadToEndAsync();
+            var stdout = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
+            var stderr = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromMinutes(5));
             try
             {
-                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -232,11 +233,11 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                 catch (InvalidOperationException) { }
                 throw;
             }
-            var errors = await stderr.ConfigureAwait(false);
-            await stdout.ConfigureAwait(false);
+            containment.Dispose();
+            await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (process.ExitCode != 0)
-                throw new IOException($"Ghostscript exit code {process.ExitCode}. {errors.Trim()}");
+                throw new IOException($"Ghostscript exit code {process.ExitCode}.");
 
             await using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
@@ -247,6 +248,8 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                     throw new IOException("Output does not contain a PDF signature.");
             }
             var written = new FileInfo(temp).Length;
+            if (written > 512L * 1024 * 1024) throw new InvalidDataException("Compressed output exceeds size limit.");
+            if (File.GetLastWriteTimeUtc(source) != sourceModifiedUtc) throw new IOException("Source changed during compression.");
             if (skipLarger && written >= before)
                 return new PdfJobResult(displayName, beforeText, afterText, "Skipped (not smaller)");
 
@@ -301,6 +304,7 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
                 catch (InvalidOperationException) { }
                 process.Dispose();
             }
+            containment?.Dispose();
             if (temp is not null)
             {
                 try { if (File.Exists(temp)) File.Delete(temp); }
@@ -312,10 +316,13 @@ public partial class PdfCompressionTab : System.Windows.Controls.UserControl
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
         if (_stop is not null) return;
+        using (var identity = WindowsIdentity.GetCurrent())
+            if (new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
+            { MessageBox.Show("Run Transflux without administrator elevation for PDF compression.", "PDF compression"); return; }
         var gs = FindGhostscript();
         if (gs is null)
         {
-            MessageBox.Show("Ghostscript was not found. Install Ghostscript for Windows and try again.", "PDF compression");
+            MessageBox.Show("Ghostscript was not found. Install reviewed Ghostscript 10.08.0 under Program Files and try again.", "PDF compression");
             return;
         }
         if (_sourceFolder is null && (_files.Count == 0 || _files.Any(p => !File.Exists(p))))
