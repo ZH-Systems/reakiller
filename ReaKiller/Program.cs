@@ -39,6 +39,9 @@ public static class ReaKiller
         if (args.Length > 0 && args[0].Equals("xml-to-csv", StringComparison.OrdinalIgnoreCase))
             return await XmlCsvCommand.RunAsync(args);
 
+        if (args.Length > 0 && args[0].Equals("pdf-to-csv", StringComparison.OrdinalIgnoreCase))
+            return await PdfCsvCommand.RunAsync(args);
+
         if (args.Length == 0)
             return await RunInteractiveAsync();
 
@@ -1015,6 +1018,7 @@ public static class ReaKiller
             Usage:
               ReaKiller.exe convert <file-or-directory> --output <directory> [options]
               ReaKiller.exe xml-to-csv <file-or-directory> --output <directory> [options]
+              ReaKiller.exe pdf-to-csv <file-or-directory> --output <directory> [options]
             Options:\n              --include-ext bmp,tif   Only convert these source extensions\n              --exclude-ext jpg,png   Skip these source extensions
               --format png|jpg        Output format (default png)\n              --optimize-in-place     Conservative same-format optimization (PNG only)\n              --in-place              Write converted image beside source, then delete converted source
               --recursive, -r         Traverse subdirectories
