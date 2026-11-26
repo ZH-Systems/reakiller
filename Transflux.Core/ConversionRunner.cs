@@ -11,7 +11,9 @@ public static class ConversionRunner
         var items = ConversionPlanner.Plan(job, converter, cancellationToken);
         var results = new ConcurrentBag<ConversionResult>();
         var completed = 0;
-        await Parallel.ForEachAsync(items, new ParallelOptions { MaxDegreeOfParallelism = job.Workers,
+        var workerLimit = job.Operation == ConversionOperation.PdfToCsv ? 4 : 16;
+        var workers = Math.Min(job.Workers, workerLimit);
+        await Parallel.ForEachAsync(items, new ParallelOptions { MaxDegreeOfParallelism = workers,
             CancellationToken = cancellationToken }, async (item, token) =>
         {
             var result = await RunItemAsync(job, converter, item, token);
@@ -43,6 +45,8 @@ public static class ConversionRunner
             await converter.ConvertAsync(item.Source, temporary, token);
             token.ThrowIfCancellationRequested();
             if (!File.Exists(temporary)) throw new IOException("Converter did not produce an output.");
+            if (File.GetLastWriteTimeUtc(item.Source) != modified)
+                throw new IOException("Source changed during conversion; output not published.");
             if (job.PreserveTimestamps)
             {
                 File.SetCreationTimeUtc(temporary, created);
