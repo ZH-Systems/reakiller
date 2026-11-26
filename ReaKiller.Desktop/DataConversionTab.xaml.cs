@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Transflux.Core;
 using System.IO;
 using System.Data;
 using System.Text.Json;
@@ -11,8 +12,84 @@ namespace ReaKiller.Desktop;
 public partial class DataConversionTab : System.Windows.Controls.UserControl
 {
     private CancellationTokenSource? stop;
-    public bool IsBusy => stop is not null;
-    public DataConversionTab() { InitializeComponent(); }
+    public bool IsBusy => stop is not null || draining;
+    private QueueStore? store;
+    private List<QueueJob> jobs = new();
+    private bool paused = true;
+    private bool draining;
+    public DataConversionTab()
+    {
+        InitializeComponent();
+        try { store = new QueueStore(); jobs = store.Load(); store.Save(jobs); RefreshQueue(); }
+        catch { store?.Dispose(); store = null; QueueStatus.Text = "Queue unavailable. Existing storage was not reset."; }
+    }
+    public void CloseQueue() { store?.Dispose(); store = null; }
+    private void RefreshQueue()
+    {
+        QueueList.ItemsSource = null;
+        QueueList.ItemsSource = jobs.Select(j => new QueueDisplay(j.Id, j.Operation, j.State, j.Attempts, j.Created)).ToList();
+        QueueStatus.Text = paused ? "Queue paused" : "Queue enabled";
+    }
+    private sealed record QueueDisplay(Guid Id, string Operation, QueueState State, int Attempts, DateTimeOffset Created);
+    private void Persist(List<QueueJob> next)
+    {
+        if (store is null) throw new IOException("Persistent queue unavailable.");
+        store.Save(next); jobs = next; RefreshQueue();
+    }
+    private void Change(QueueJob job) => Persist(jobs.Select(j => j.Id == job.Id ? job : j).ToList());
+    private async void ResumeQueue(object sender, RoutedEventArgs e) { paused = false; RefreshQueue(); await DrainQueue(); }
+    private void PauseQueue(object sender, RoutedEventArgs e) { paused = true; RefreshQueue(); }
+    private async void RetryQueue(object sender, RoutedEventArgs e)
+    {
+        if (QueueList.SelectedItem is not QueueDisplay selected) return;
+        try { Change(jobs.Single(j => j.Id == selected.Id).Retry()); await DrainQueue(); }
+        catch (Exception) { QueueStatus.Text = "Unable to retry selected job."; }
+    }
+    private void RemoveQueue(object sender, RoutedEventArgs e)
+    {
+        if (QueueList.SelectedItem is not QueueDisplay selected) return;
+        if (jobs.Any(j => j.Id == selected.Id && j.State == QueueState.Running)) return;
+        try { Persist(jobs.Where(j => j.Id != selected.Id).ToList()); }
+        catch { QueueStatus.Text = "Unable to remove selected job."; }
+    }
+    private async Task DrainQueue()
+    {
+        if (draining || stop is not null || paused || store is null) return;
+        draining = true;
+        try
+        {
+            while (!paused && jobs.FirstOrDefault(j => j.State == QueueState.Pending) is QueueJob job)
+            {
+                // Never silently run a recovered queue: resume is explicit after startup.
+                if (job.Arguments.Contains("--overwrite") && System.Windows.MessageBox.Show("This queued job permits replacing existing CSV files. Continue?", "Confirm overwrite", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                { Change(job with { State = QueueState.Cancelled, Updated = DateTimeOffset.UtcNow }); continue; }
+                job.Validate();
+                var running = job with { State = QueueState.Running, Attempts = job.Attempts + 1, Updated = DateTimeOffset.UtcNow };
+                Change(running);
+                var state = QueueState.Failed;
+                try
+                {
+                    var exe = Path.Combine(AppContext.BaseDirectory, "ReaKiller.exe");
+                    var start = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                    foreach (var arg in running.Arguments) start.ArgumentList.Add(arg);
+                    // Reconfirm OCR every execution because its configuration may have changed.
+                    if (running.Arguments.Contains("--ocr-config") &&
+                        System.Windows.MessageBox.Show("Run queued OCR using the previously selected trusted configuration?", "Confirm OCR", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                        state = QueueState.Cancelled;
+                    else
+                    {
+                        await RunProcess(start, false);
+                        state = QueueState.Completed;
+                    }
+                }
+                catch (OperationCanceledException) { state = QueueState.Cancelled; paused = true; }
+                catch { state = QueueState.Failed; }
+                Change(running with { State = state, Updated = DateTimeOffset.UtcNow });
+            }
+        }
+        catch { paused = true; QueueStatus.Text = "Queue storage or execution failed. Resume only after review."; }
+        finally { draining = false; }
+    }
     private bool Pdf => Mode.SelectedIndex == 1;
     private void ModeChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -63,8 +140,8 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
     private static IEnumerable<string> Lines(string s) => s.Split(new[] {'\r','\n'}, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     private async void PreviewClick(object sender, RoutedEventArgs e) => await Execute(true);
     private async void RunClick(object sender, RoutedEventArgs e) => await Execute(false);
-    private void StopClick(object sender, RoutedEventArgs e) => stop?.Cancel();
-    public void Cancel() => stop?.Cancel();
+    private void StopClick(object sender, RoutedEventArgs e) { paused = true; stop?.Cancel(); }
+    public void Cancel() { paused = true; stop?.Cancel(); }
 
     private async Task Execute(bool preview)
     {
@@ -116,6 +193,25 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
                 if (!string.IsNullOrWhiteSpace(RecordPath.Text)) Add("--record-path", RecordPath.Text.Trim());
                 foreach (var column in Lines(XmlColumns.Text)) Add("--column", column);
             }
+            if (!preview)
+            {
+                var job = new QueueJob(Guid.NewGuid(), start.ArgumentList.ToArray(), DateTimeOffset.UtcNow, QueueState.Pending);
+                job.Validate();
+                Persist(jobs.Append(job).ToList());
+                QueueStatus.Text = "Job added. Resume queue to execute.";
+                if (!paused) await DrainQueue();
+                return;
+            }
+            await RunProcess(start, true);
+        }
+        catch (OperationCanceledException) { Status.Text = "Stopped."; }
+        catch (Exception ex) { Status.Text = ex.Message; }
+    }
+
+    private async Task RunProcess(ProcessStartInfo start, bool preview)
+    {
+        try
+        {
             stop = new CancellationTokenSource(TimeSpan.FromHours(2));
             var token = stop.Token;
             SettingsPanel.IsEnabled = RunButton.IsEnabled = PreviewButton.IsEnabled = false;
@@ -157,8 +253,8 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
                 try { await Task.WhenAll(stdout, stderr); } catch (OperationCanceledException) { } catch (InvalidDataException) { }
             }
         }
-        catch (OperationCanceledException) { Status.Text = "Stopped. Check output folder for completed files."; }
-        catch (Exception ex) { Status.Text = ex.Message; }
+        catch (OperationCanceledException) { Status.Text = "Stopped. Check output folder for completed files."; throw; }
+        catch (Exception) { Status.Text = "Conversion failed."; throw; }
         finally
         {
             stop?.Dispose(); stop = null;
