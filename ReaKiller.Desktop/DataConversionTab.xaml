@@ -40,6 +40,7 @@
       <Button Content="Clear OCR configuration" Click="ClearOcr" HorizontalAlignment="Left" Margin="0,0,0,12"/>
       <TextBlock Text="OCR is experimental. Use only a reviewed configuration and approved local binaries." Foreground="#805020" TextWrapping="Wrap"/>
      </StackPanel>
+     <WrapPanel Margin="0,12,0,0"><Button Content="Save preset" Click="SaveDataPreset" Margin="0,0,8,0"/><Button Content="Load preset" Click="LoadDataPreset"/></WrapPanel>
      <TextBlock Text="Workers" FontWeight="SemiBold" Margin="0,12,0,0"/>
      <TextBox x:Name="Workers" Text="1" Margin="0,6,0,12" AutomationProperties.Name="Worker count"/>
     </StackPanel>
@@ -55,10 +56,10 @@
    <TabControl Grid.Row="2">
     <TabItem Header="Preview"><DataGrid x:Name="PreviewGrid" IsReadOnly="True" AutoGenerateColumns="True" CanUserAddRows="False" EnableRowVirtualization="True"/></TabItem>
     <TabItem Header="Queue"><DockPanel><StackPanel DockPanel.Dock="Top"><TextBlock x:Name="QueueStatus" Text="Queue paused" Margin="8"/><WrapPanel Margin="8"><Button Content="Resume queue" Click="ResumeQueue" Margin="0,0,6,0"/><Button Content="Pause queue" Click="PauseQueue" Margin="0,0,6,0"/><Button Content="Retry selected" Click="RetryQueue" Margin="0,0,6,0"/><Button Content="Remove selected" Click="RemoveQueue"/></WrapPanel></StackPanel><DataGrid x:Name="QueueList" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False"><DataGrid.Columns><DataGridTextColumn Header="Operation" Binding="{Binding Operation}"/><DataGridTextColumn Header="Status" Binding="{Binding State}"/><DataGridTextColumn Header="Attempts" Binding="{Binding Attempts}"/><DataGridTextColumn Header="Created" Binding="{Binding Created}"/></DataGrid.Columns></DataGrid></DockPanel></TabItem>
-    <TabItem Header="Activity"><TextBox x:Name="Log" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></TabItem>
+    <TabItem Header="Activity"><DockPanel><Button DockPanel.Dock="Top" Content="Export last summary" Click="ExportSummary" HorizontalAlignment="Left" Margin="8"/><TextBox x:Name="Log" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></DockPanel></TabItem>
    </TabControl>
    <WrapPanel Grid.Row="3" Margin="0,16,0,0">
-    <Button x:Name="PreviewButton" Content="Preview PDF" Click="PreviewClick" Margin="0,0,8,0" IsEnabled="False"/>
+    <Button x:Name="PreviewButton" Content="Preview data" Click="PreviewClick" Margin="0,0,8,0"/>
     <Button x:Name="RunButton" Content="Add to queue" Click="RunClick" Margin="0,0,8,0"/>
     <Button x:Name="StopButton" Content="Stop" Click="StopClick" IsEnabled="False"/>
    </WrapPanel>

@@ -131,6 +131,42 @@ public sealed class XmlCsvConverter(string? recordPath = null, IReadOnlyList<str
     private static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
     private static string Line(IEnumerable<string> values) => string.Join(",", values.Select(Csv));
 
+    public IReadOnlyList<string[]> Preview(string source, CancellationToken token = default)
+    {
+        // Discover the schema across the entire document, but retain only 19 sample records.
+        var headers = columns?.ToList() ?? new List<string>();
+        var known = new HashSet<string>(headers, StringComparer.Ordinal);
+        if (known.Count != headers.Count || known.Count > MaxColumns)
+            throw new ArgumentException("Invalid selected columns.");
+        var observed = new HashSet<string>(StringComparer.Ordinal);
+        var sample = new List<Dictionary<string, string>>();
+        long retained = 0;
+        foreach (var row in Rows(source, token))
+        {
+            if (columns is null)
+            {
+                foreach (var key in row.Keys)
+                    if (known.Add(key)) headers.Add(key);
+            }
+            else observed.UnionWith(row.Keys);
+            if (known.Count > MaxColumns || observed.Count > MaxColumns)
+                throw new InvalidDataException("XML schema exceeds column limit.");
+            if (sample.Count < 19)
+            {
+                retained += row.Sum(x => (long)x.Key.Length + x.Value.Length);
+                if (retained > 1024 * 1024) throw new InvalidDataException("Preview exceeds size limit.");
+                sample.Add(row);
+            }
+        }
+        if (sample.Count == 0 || headers.Count == 0) throw new InvalidDataException("No matching XML records or columns.");
+        if (headers.Count > 512) throw new InvalidDataException("Preview supports up to 512 columns. Select a subset.");
+        if (columns is not null && headers.Any(h => !observed.Contains(h)))
+            throw new InvalidDataException("One or more selected columns were not found.");
+        var result = new List<string[]> { headers.ToArray() };
+        result.AddRange(sample.Select(row => headers.Select(h => row.GetValueOrDefault(h, "")).ToArray()));
+        return result;
+    }
+
     public async Task ConvertAsync(string source, string temporaryOutput, CancellationToken cancellationToken)
     {
         var headers = columns?.ToList() ?? new List<string>();
