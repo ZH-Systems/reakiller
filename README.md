@@ -203,3 +203,14 @@ The desktop image converter automatically uses `--batch-size 500` for large jobs
 GitHub Actions now builds a 64-bit MSI using WiX Toolset 4 in addition to the existing portable desktop bundle. Download the **ReaKiller-MSI-win-x64** workflow artifact and run `ReaKiller-win-x64.msi` with administrator privileges. The installer places the self-contained .NET 10 desktop and CLI binaries in `Program Files\\ReaKiller`, adds a Start Menu shortcut, and registers an application entry for Windows uninstall. Subsequent versions use a stable MSI UpgradeCode for major upgrades (update the package version when publishing a new release). The executable bundle remains available independently.
 
 **Ghostscript is not bundled or installed by the MSI.** To enable PDF compression, install Ghostscript for Windows separately according to its applicable licence. This MSI has no custom actions or network calls and does not modify source images during installation.
+
+## XML to CSV (CLI)
+
+```powershell
+ReaKiller.exe xml-to-csv "D:\Exports\Patients.xml" --output "D:\CSV" --record-path "Patients/Patient"
+ReaKiller.exe xml-to-csv "D:\Exports" --output "D:\CSV" --recursive --threads 4
+```
+
+The converter reads XML twice, discovering all flattened columns before writing UTF-8 CSV. Automatic mode selects the first direct child element of the root as the record type; specify an exact root-relative path for mixed schemas. Namespaces use Clark notation, e.g. `{urn:example}Root/{urn:example}Record`. Repeat `--column` to select and order columns. Attributes use @, nested fields use dots, repeated siblings use the base column for the first value and [2], [3], etc. for subsequent values. Missing values are empty. DTDs and external entities are prohibited. Original files and timestamps are preserved by the shared runner; existing outputs are skipped unless --overwrite is specified. Ctrl+C cancels the job. CSV values are quoted but not modified to neutralize spreadsheet formulas; import untrusted values as text.
+
+This milestone implements one CSV per input and exact record paths, not arbitrary XPath expressions, separate related entity tables, or a desktop preview. The unified desktop integration is deferred to the desktop milestone. Memory usage scales with the largest selected record and discovered column set rather than the entire document.
