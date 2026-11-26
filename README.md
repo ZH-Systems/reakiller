@@ -214,3 +214,17 @@ ReaKiller.exe xml-to-csv "D:\Exports" --output "D:\CSV" --recursive --threads 4
 The converter reads XML twice, discovering all flattened columns before writing UTF-8 CSV. Automatic mode selects the first direct child element of the root as the record type; specify an exact root-relative path for mixed schemas. Namespaces use Clark notation, e.g. `{urn:example}Root/{urn:example}Record`. Repeat `--column` to select and order columns. Attributes use @, nested fields use dots, repeated siblings use the base column for the first value and [2], [3], etc. for subsequent values. Missing values are empty. DTDs and external entities are prohibited. Original files and timestamps are preserved by the shared runner; existing outputs are skipped unless --overwrite is specified. Ctrl+C cancels the job. CSV values are quoted but not modified to neutralize spreadsheet formulas; import untrusted values as text.
 
 This milestone implements one CSV per input and exact record paths, not arbitrary XPath expressions, separate related entity tables, or a desktop preview. The unified desktop integration is deferred to the desktop milestone. Memory usage scales with the largest selected record and discovered column set rather than the entire document.
+
+## PDF to CSV (native text, CLI)
+
+Uses PdfPig 0.1.16 and positional row reconstruction. No external service is used.
+
+```powershell
+ReaKiller.exe pdf-to-csv "D:\Reports\Billing.pdf" --preview
+ReaKiller.exe pdf-to-csv "D:\Reports\Billing.pdf" --output "D:\CSV" --first-page 2 --last-page 5 --boundary 150 --boundary 300 --header ID --header Name --header Amount
+ReaKiller.exe pdf-to-csv "D:\Reports" --output "D:\CSV" --recursive --threads 4
+```
+
+Automatic mode groups words by vertical position (default tolerance 3 PDF points) and horizontal gaps (default 12 points). Explicit ascending boundaries in PDF points provide stable columns and preserve empty cells. The first extracted row is treated as a header; repeated identical headers at the start of later pages are removed unless --keep-headers is specified. Custom headers replace the first row. Preview returns up to 20 rows as JSON without writing output. A preview is not full-document validation. Unequal automatic row widths and pages with no extractable words fail rather than publishing partial output. Original files and timestamps are preserved by the shared runner. CSV values are quoted but not sanitized for spreadsheet formula execution; import untrusted values as text.
+
+Limitations: this is heuristic extraction of a single consistently formatted table per PDF, not a general table recognition engine. Titles, footers, wrapped rows, rotated text, multiple unrelated tables and sparse or misaligned columns may require manual preprocessing; even equal row widths do not establish semantic correctness. Verify output against source reports before migration. Scanned PDF OCR and interactive WPF preview are later milestones. No patient data is included in tests.
