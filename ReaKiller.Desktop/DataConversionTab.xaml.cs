@@ -16,7 +16,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
     private bool Pdf => Mode.SelectedIndex == 1;
     private void ModeChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (PdfSettings is null || XmlSettings is null || PreviewButton is null) return;
+        if (PdfSettings is null || XmlSettings is null || PreviewButton is null || Source is null || PreviewGrid is null) return;
         PdfSettings.Visibility = Pdf ? Visibility.Visible : Visibility.Collapsed;
         XmlSettings.Visibility = Pdf ? Visibility.Collapsed : Visibility.Visible;
         PreviewButton.IsEnabled = Pdf;
@@ -71,6 +71,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
         if (IsBusy) return;
         try
         {
+            if (string.IsNullOrWhiteSpace(Source.Text)) throw new ArgumentException("Select a source first.");
             var source = Path.GetFullPath(Source.Text.Trim());
             if (!Directory.Exists(source) && !File.Exists(source)) throw new ArgumentException("Select an existing source.");
             if (File.Exists(source) && !Path.GetExtension(source).Equals(Pdf ? ".pdf" : ".xml", StringComparison.OrdinalIgnoreCase))
@@ -115,7 +116,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
                 if (!string.IsNullOrWhiteSpace(RecordPath.Text)) Add("--record-path", RecordPath.Text.Trim());
                 foreach (var column in Lines(XmlColumns.Text)) Add("--column", column);
             }
-            stop = new CancellationTokenSource();
+            stop = new CancellationTokenSource(TimeSpan.FromHours(2));
             var token = stop.Token;
             SettingsPanel.IsEnabled = RunButton.IsEnabled = PreviewButton.IsEnabled = false;
             StopButton.IsEnabled = true;
@@ -153,7 +154,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
             {
                 if (!process.HasExited) process.Kill(entireProcessTree: true);
                 await process.WaitForExitAsync();
-                try { await Task.WhenAll(stdout, stderr); } catch (OperationCanceledException) { }
+                try { await Task.WhenAll(stdout, stderr); } catch (OperationCanceledException) { } catch (InvalidDataException) { }
             }
         }
         catch (OperationCanceledException) { Status.Text = "Stopped. Check output folder for completed files."; }
