@@ -11,4 +11,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <ProjectReference Include="../ReaKiller/ReaKiller.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Transflux.Core/Transflux.Core.csproj" />
+  </ItemGroup>
 </Project>

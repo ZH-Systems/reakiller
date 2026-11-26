@@ -20,4 +20,7 @@
   <Target Name="GenerateReaKillerIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../scripts/Generate-Icon.ps1&quot;" />
   </Target>
+  <ItemGroup>
+    <ProjectReference Include="../Transflux.Core/Transflux.Core.csproj" />
+  </ItemGroup>
 </Project>
