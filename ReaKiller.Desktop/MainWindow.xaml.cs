@@ -51,14 +51,14 @@ public partial class MainWindow : Window
     {
         if (_running)
         {
-            if (manual) MessageBox.Show("Finish or stop the current conversion before updating.", "ReaKiller updates");
+            if (manual) MessageBox.Show("Finish or stop the current conversion before updating.", "Transflux updates");
             return;
         }
         // Do not offer MSI upgrades to portable installations.
         using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ZH Systems\ReaKiller");
         if (key?.GetValue("Installed") is null)
         {
-            if (manual) MessageBox.Show("Automatic updates require the MSI-installed edition. Download portable releases from GitHub.", "ReaKiller updates");
+            if (manual) MessageBox.Show("Automatic updates require the MSI-installed edition. Download portable releases from GitHub.", "Transflux updates");
             return;
         }
         try
@@ -66,19 +66,19 @@ public partial class MainWindow : Window
             var release = await UpdateService.CheckAsync();
             if (release is null)
             {
-                if (manual) MessageBox.Show("No newer signed MSI release is available.", "ReaKiller updates");
+                if (manual) MessageBox.Show("No newer signed MSI release is available.", "Transflux updates");
                 return;
             }
             if (_running) return;
             var notes = release.Notes.Length > 900 ? release.Notes[..900] + "..." : release.Notes;
-            if (MessageBox.Show($"ReaKiller {release.Version} is available.\n\n{notes}\n\nInstall this update now? Administrator permission may be required.",
+            if (MessageBox.Show($"Transflux {release.Version} is available.\n\n{notes}\n\nInstall this update now? Administrator permission may be required.",
                     "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes) return;
             if (_running) return;
             await UpdateService.DownloadAndLaunchAsync(release);
         }
         catch (Exception ex)
         {
-            if (manual) MessageBox.Show("Unable to check or install updates: " + ex.Message, "ReaKiller updates");
+            if (manual) MessageBox.Show("Unable to check or install updates: " + ex.Message, "Transflux updates");
         }
     }
 
@@ -635,9 +635,9 @@ public partial class MainWindow : Window
         }
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "ReaKiller preset (*.json)|*.json",
+            Filter = "Transflux preset (*.json)|*.json",
             DefaultExt = ".json",
-            FileName = "reakiller-preset.json"
+            FileName = "transflux-preset.json"
         };
         if (dialog.ShowDialog() != true) return;
         var preset = new SavedPreset((int)EffortSlider.Value, (int)ContrastSlider.Value,
@@ -649,7 +649,7 @@ public partial class MainWindow : Window
 
     private void LoadPreset_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "ReaKiller preset (*.json)|*.json" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Transflux preset (*.json)|*.json" };
         if (dialog.ShowDialog() != true) return;
         try
         {
