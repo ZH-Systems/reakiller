@@ -1,6 +1,6 @@
-# ReaKiller
+# Transflux
 
-Personal Windows command-line image converter for IMG, DICOM, JPEG, and TIFF to PNG.
+Transflux (formerly ReaKiller) is a local Windows file conversion and compression utility by ZH Systems. The initial rebrand retains legacy executable names, installation directory, registry key, report names and release asset names for compatibility with existing automation and installed updaters. See [ROADMAP.md](ROADMAP.md) for the Transflux 2.0 development plan.
 
 ## Important sample finding
 All 18 IMG files provided in test.7z are **standard JPEG files with an IMG extension**. The program recognizes JPEG headers inside IMG files. Other IMG encodings are not guaranteed to work.
