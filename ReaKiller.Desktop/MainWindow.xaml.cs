@@ -597,7 +597,7 @@ public partial class MainWindow : Window
     {
         e.Effects = FeatureTabs.SelectedIndex == 0 && !_running && e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
             ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
-        e.Handled = true;
+        e.Handled = FeatureTabs.SelectedIndex == 0;
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
