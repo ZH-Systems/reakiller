@@ -48,6 +48,9 @@ jobs:
         run: dotnet test ReaKiller.Tests/ReaKiller.Tests.csproj -c Release
       - name: Publish CLI
         run: dotnet publish ReaKiller/ReaKiller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+      - name: Synthetic conversion benchmark
+        shell: pwsh
+        run: ./scripts/Benchmark-DataConversion.ps1 -Executable ./publish/ReaKiller.exe -Files 10 -Rows 1000
       - name: Build desktop
         run: dotnet build ReaKiller.Desktop/ReaKiller.Desktop.csproj -c Release
       - name: Publish desktop
