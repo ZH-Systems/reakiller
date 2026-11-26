@@ -272,7 +272,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
         {
             stop?.Dispose(); stop = null;
             SettingsPanel.IsEnabled = RunButton.IsEnabled = true;
-            PreviewButton.IsEnabled = Pdf;
+            PreviewButton.IsEnabled = true;
             StopButton.IsEnabled = Activity.IsIndeterminate = false;
         }
     }
@@ -317,6 +317,7 @@ public partial class DataConversionTab : System.Windows.Controls.UserControl
     }
     private void ExportSummary(object sender, RoutedEventArgs e)
     {
+        if (IsBusy) return;
         if (lastSummary is null) { Status.Text = "No completed conversion summary available."; return; }
         try
         {
