@@ -45,12 +45,13 @@ internal static class PdfCsvCommand
                     default: throw new ArgumentException("Unknown option: " + args[i]);
                 }
             }
-            var converter = new PdfCsvConverter(new PdfCsvOptions(first, last, tolerance, gap, repeated,
+            if (workers < 1 || workers > 4) throw new ArgumentException("PDF workers must be between 1 and 4.");
+            var converter = new IsolatedPdfConverter(new PdfCsvOptions(first, last, tolerance, gap, repeated,
                 boundaries.Count == 0 ? null : boundaries, headers.Count == 0 ? null : headers));
             if (preview)
             {
                 if (!File.Exists(args[1])) throw new ArgumentException("Preview requires a single PDF.");
-                Console.WriteLine(JsonSerializer.Serialize(converter.Preview(args[1], token: cancellation.Token)));
+                Console.WriteLine(JsonSerializer.Serialize(await converter.PreviewAsync(args[1], cancellation.Token)));
                 return 0;
             }
             if (string.IsNullOrWhiteSpace(output)) throw new ArgumentException("--output is required.");
