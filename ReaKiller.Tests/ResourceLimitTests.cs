@@ -21,6 +21,22 @@ public sealed class ResourceLimitTests
         finally { Directory.Delete(root, true); }
     }
     [Fact]
+    public async Task LargeSchemaIsRejected()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "wide.xml");
+            await File.WriteAllTextAsync(source, "<root><record>" +
+                string.Concat(Enumerable.Range(0, 4100).Select(i => $"<c{i}>x</c{i}>")) +
+                "</record></root>");
+            await Assert.ThrowsAsync<InvalidDataException>(() => new XmlCsvConverter().ConvertAsync(
+                source, Path.Combine(root, "out.csv"), CancellationToken.None));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+    [Fact]
     public void InvalidJobLimitsAreRejected()
     {
         if (!OperatingSystem.IsWindows()) return;
