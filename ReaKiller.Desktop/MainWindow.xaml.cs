@@ -40,6 +40,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await CheckUpdatesAsync(false);
         Closed += (_, _) =>
         {
+            DataWorkspace.CloseQueue();
             try { if (_process is { HasExited: false }) _process.Kill(entireProcessTree: true); }
             catch { /* Process may already have exited. */ }
         };
@@ -70,11 +71,11 @@ public partial class MainWindow : Window
                 if (manual) MessageBox.Show("No newer signed MSI release is available.", "Transflux updates");
                 return;
             }
-            if (_running) return;
+            if (_running || DataWorkspace.IsBusy) return;
             var notes = release.Notes.Length > 900 ? release.Notes[..900] + "..." : release.Notes;
             if (MessageBox.Show($"Transflux {release.Version} is available.\n\n{notes}\n\nInstall this update now? Administrator permission may be required.",
                     "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes) return;
-            if (_running) return;
+            if (_running || DataWorkspace.IsBusy) return;
             await UpdateService.DownloadAndLaunchAsync(release);
         }
         catch (Exception ex)
