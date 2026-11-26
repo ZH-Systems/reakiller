@@ -28,7 +28,26 @@ try {
         $outputs = @(Get-ChildItem -LiteralPath $out -Filter '*.csv' -File)
         if ($outputs.Count -ne $Files) { throw 'Unexpected output count' }
         foreach ($file in $outputs) {
-            if ([System.IO.File]::ReadLines($file.FullName).Count -ne ($Rows+1)) { throw 'Unexpected row count' }
+            $reader = [System.IO.StreamReader]::new($file.FullName)
+            try {
+                $header = $reader.ReadLine()
+                if ($header -cne '"Id","Value"') {
+                    throw "Unexpected CSV header in $($file.Name): $header"
+                }
+                $actualRows = 0
+                while (($line = $reader.ReadLine()) -ne $null) {
+                    $expected = '"{0}","synthetic"' -f $actualRows
+                    if ($line -cne $expected) {
+                        throw "Unexpected CSV data in $($file.Name) at record $($actualRows + 1): expected $expected; actual $line"
+                    }
+                    $actualRows++
+                }
+                if ($actualRows -ne $Rows) {
+                    throw "Unexpected row count in $($file.Name) with $n workers: expected $Rows data rows, actual $actualRows"
+                }
+            } finally {
+                $reader.Dispose()
+            }
         }
         [pscustomobject]@{ Workers=$n; Files=$Files; Rows=($Files*$Rows); Seconds=[math]::Round($clock.Elapsed.TotalSeconds,3); RowsPerSecond=[math]::Round(($Files*$Rows)/[math]::Max(.001,$clock.Elapsed.TotalSeconds),0) }
     }
