@@ -7,3 +7,6 @@ obj/
 *.log
 samples/
 output/
+
+assets/Transflux.ico
+assets/Transflux.png

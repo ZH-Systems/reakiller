@@ -5,6 +5,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $exe = (Resolve-Path -LiteralPath $Executable).Path
 $msiPath = (Resolve-Path -LiteralPath $Msi).Path
+if ([IO.Path]::GetFileName($exe) -cne 'Transflux.exe' -or [IO.Path]::GetFileName($msiPath) -cne 'Transflux-win-x64.msi') {
+    throw 'Unexpected candidate file names'
+}
 $installer = New-Object -ComObject WindowsInstaller.Installer
 $db = $installer.OpenDatabase($msiPath, 0)
 try {

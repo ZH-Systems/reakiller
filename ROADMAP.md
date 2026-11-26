@@ -17,10 +17,12 @@ Each milestone has one branch and one pull request. Branch from the preceding mi
 | 09 | milestone/09-workflow-polish | Presets, history, notifications, reports and usability testing |
 | 10 | milestone/10-release | Dependency/license audit, regression suite, signed MSI upgrade validation and release |
 
+| 11 | milestone/11-complete-rebrand | New executable and MSI names, distinct product identity, emerald icon, clean-install verification |
+
 ## Compatibility
 
-The first branded release must have a version greater than the installed legacy version. Keep the existing UpgradeCode, install location, registry key, CLI executable names and signed release asset names during the transition. Do not rename the repository or remove legacy assets until old updater compatibility is verified. All document processing stays local; never commit patient data. Preserve source files by default and retain filesystem timestamps where supported. Validate radiograph fidelity against trusted exports.
+M11 supersedes the initial compatibility approach. Uninstall ReaKiller before installing Transflux. Future Transflux versions retain the new UpgradeCode. Repository slug remains unchanged until separately renamed. All document processing stays local; preserve sources by default.
 
 ## Release gates
 
-Windows build/test/MSI CI, installation and upgrade from a prior signed release, updater asset and checksum verification, CLI automation and timestamp regression checks. No release tag until these gates are met.
+Windows build/test/MSI CI, clean installation and subsequent Transflux upgrade testing, updater asset and checksum verification, CLI automation and timestamp regression checks. No release tag until these gates are met.

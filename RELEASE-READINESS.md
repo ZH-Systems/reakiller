@@ -22,7 +22,7 @@ Status: **HOLD**. This is not a release authorization. Production tag builds fai
 | Clean sensitive abandoned temporary files without touching live or unrelated files | Pending |
 | End-to-end OCR accuracy, malformed input and process containment tests | Pending |
 | Regression and image fidelity tests on authorized representative inputs | Pending |
-| Windows upgrade from previous signed ReaKiller MSI and rollback tests | Pending |
+| Clean Transflux installation and subsequent Transflux upgrade/rollback tests | Pending |
 | Signed updater/MSI compatibility and signing key rotation policy | Pending |
 | Reviewed signing job with least privilege, protected environment, signed artifacts and checksum | Pending |
 
@@ -30,8 +30,8 @@ Do not process sensitive production data with an unapproved candidate. A passing
 
 ## Compatibility and intentional changes
 
-The MSI upgrade code, install directory, registry marker and historical executable/asset names remain unchanged. Legacy PDF compression now requires reviewed Ghostscript 10.08.0 under Program Files, refuses administrator elevation and uses bounded child processes. The updater rejects a changed signing key; if the certificate service rotates keys, distribute a manually verified update until a trusted rotation mechanism is implemented. Same-user compromise is not addressed by update staging or DPAPI. Windows job containment does not enforce filesystem/network isolation. Routine builds produce unsigned CI artifacts, which must not be treated as releases.
+M11 introduces a new MSI UpgradeCode, install directory, registry marker and executable/asset names. Uninstall ReaKiller first. Legacy PDF compression now requires reviewed Ghostscript 10.08.0 under Program Files, refuses administrator elevation and uses bounded child processes. The updater rejects a changed signing key; if the certificate service rotates keys, distribute a manually verified update until a trusted rotation mechanism is implemented. Same-user compromise is not addressed by update staging or DPAPI. Windows job containment does not enforce filesystem/network isolation. Routine builds produce unsigned CI artifacts, which must not be treated as releases.
 
 ## Release procedure (after clearance)
 
-Review dependency graphs and lock files, confirm all gates above, approve a dedicated signing/release job with only the permissions it requires, validate an actual signed candidate on an isolated test machine, then publish the reviewed tag with the existing MSI asset name and its SHA-256 checksum. Never bypass the hold or suppress advisory errors merely to produce a release.
+Review dependency graphs and lock files, confirm all gates above, approve a dedicated signing/release job with only the permissions it requires, validate an actual signed candidate on an isolated test machine, then publish the reviewed tag with the new Transflux-win-x64.msi asset name and its SHA-256 checksum. Never bypass the hold or suppress advisory errors merely to produce a release.
