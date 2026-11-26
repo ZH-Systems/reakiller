@@ -21,7 +21,7 @@ internal static class UpdateService
 
     static UpdateService()
     {
-        Client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ReaKiller", "1.0"));
+        Client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Transflux", "1.0"));
         Client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
 
