@@ -7,18 +7,23 @@ on:
   pull_request:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
+      - name: Enforce release hold
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: throw 'Production release blocked pending security clearance; see RELEASE-READINESS.md.'
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -37,9 +42,25 @@ jobs:
         shell: pwsh
         run: |
           foreach ($project in Get-ChildItem -Recurse -Filter *.csproj) {
-            dotnet restore $project.FullName -p:NuGetAudit=true -p:NuGetAuditMode=all
+            dotnet restore $project.FullName -p:NuGetAudit=true -p:NuGetAuditMode=all -p:RestorePackagesWithLockFile=true
             if ($LASTEXITCODE -ne 0) { throw "Restore or security audit failed: $($project.Name)" }
           }
+      - name: Capture resolved dependency graphs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dependency-audit | Out-Null
+          foreach ($project in Get-ChildItem -Recurse -Filter *.csproj) {
+            dotnet list $project.FullName package --include-transitive --format json | Set-Content -Encoding utf8 (Join-Path dependency-audit ($project.BaseName + '.json'))
+            if ($LASTEXITCODE -ne 0) { throw 'Dependency inventory failed' }
+            $lock = Join-Path $project.DirectoryName 'packages.lock.json'
+            if (!(Test-Path $lock)) { throw 'Missing generated lock file' }
+            Copy-Item $lock (Join-Path dependency-audit ($project.BaseName + '.lock.json'))
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-audit
+          path: dependency-audit/
+          if-no-files-found: error
       - name: Restore
         run: dotnet restore ReaKiller/ReaKiller.csproj
       - name: Build
@@ -64,33 +85,6 @@ jobs:
           Copy-Item desktop/* bundle/ -Recurse -Force
           Copy-Item publish/* bundle/ -Recurse -Force
           Copy-Item updater/* bundle/ -Recurse -Force
-      - name: Azure signing login
-        if: github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Sign executables
-        if: github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ vars.ZH_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ZH_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ZH_ARTIFACT_SIGNING_PROFILE }}
-          files-folder: ${{ github.workspace }}\bundle
-          files-folder-filter: exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-      - name: Verify executable signatures
-        if: github.event_name == 'push' && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
-        shell: pwsh
-        run: |
-          foreach ($name in @("ReaKiller.exe", "ReaKiller.Desktop.exe", "ReaKiller.Updater.exe")) {
-            $sig = Get-AuthenticodeSignature (Join-Path (Resolve-Path bundle).Path $name)
-            if ($sig.Status -ne 'Valid') { throw "Invalid signature on $name" }
-          }
       - name: Install WiX
         run: dotnet tool install --global wix --version 4.0.6
       - name: Build MSI
@@ -100,38 +94,11 @@ jobs:
           ./installer/Generate-Payload.ps1 -SourceDirectory bundle -OutputFile installers/Payload.wxs
           wix build -arch x64 installer/ReaKiller.wxs installers/Payload.wxs -out installers/ReaKiller-win-x64.msi
           if (!(Test-Path installers/ReaKiller-win-x64.msi)) { throw "MSI missing" }
-      - name: Sign release MSI
-        if: startsWith(github.ref, 'refs/tags/v') && vars.ZH_ARTIFACT_SIGNING_ENABLED == 'true'
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ vars.ZH_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ZH_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ZH_ARTIFACT_SIGNING_PROFILE }}
-          files-folder: ${{ github.workspace }}\installers
-          files-folder-filter: msi
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-      - name: Prepare release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        run: |
-          if ("${{ vars.ZH_ARTIFACT_SIGNING_ENABLED }}" -ne "true") { throw "Signing required for auto updates" }
-          $sig = Get-AuthenticodeSignature installers/ReaKiller-win-x64.msi
-          if ($sig.Status -ne 'Valid') { throw "MSI must be signed" }
-          $hash = (Get-FileHash installers/ReaKiller-win-x64.msi -Algorithm SHA256).Hash.ToLowerInvariant()
-          Set-Content installers/ReaKiller-win-x64.msi.sha256 "$hash  ReaKiller-win-x64.msi"
-      - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: gh release create $env:GITHUB_REF_NAME installers/ReaKiller-win-x64.msi installers/ReaKiller-win-x64.msi.sha256 --generate-notes
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ReaKiller-MSI-win-x64
           path: installers/ReaKiller-win-x64.msi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ReaKiller-Desktop-win-x64
           path: bundle/
