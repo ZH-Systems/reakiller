@@ -9,6 +9,7 @@ public sealed record QueueJob(Guid Id, string[] Arguments, DateTimeOffset Create
         ? this with { State = QueueState.Interrupted, Updated = DateTimeOffset.UtcNow } : this;
     public QueueJob Retry()
     {
+        Validate();
         if (State is not (QueueState.Failed or QueueState.Cancelled or QueueState.Interrupted))
             throw new InvalidOperationException("Only failed or interrupted jobs can be retried.");
         // Remove overwrite switches, not option values which happen to contain that text.
